@@ -268,7 +268,7 @@ class ShowBgpSuperParser(ShowBgpSchema):
                         r'(?P<next_hop>[a-zA-Z0-9\.\:]+) +'
                         r'(?P<metric>(?:\d+(?=[ \d]{13}\d ))?) +'
                         r'(?P<local_prf>(?:\d+(?=[ \d]{6}\d ))?) +'
-                        r'(?P<weight>\d+)(?P<path>[0-9 \S\{\}]+)$')
+                        r'(?P<weight>\d+)(?P<path>[()0-9 \S\{\}]+)$')
 
         # AF-Private Import to Address-Family: L2VPN E-VPN, Pfx Count/Limit: 2/1000
         p5 = re.compile(r'^\s*AF-Private +Import +to +Address-Family:'
@@ -346,7 +346,7 @@ class ShowBgpSuperParser(ShowBgpSchema):
 
                 if m.groupdict()['termination']:
                     termination = m.groupdict()['termination']
-                    m3 = re.compile(r'(?: *(?P<path>[0-9\{\}\s]+))?'
+                    m3 = re.compile(r'(?: *(?P<path>[()0-9\{\}\s]+))?'
                                     ' +(?P<origin_codes>(i|e|\?|\|))$').match(termination)
                     if m3 and m3.groupdict()['path']:
                         path_info = m3.groupdict()['path']
@@ -433,7 +433,7 @@ class ShowBgpSuperParser(ShowBgpSchema):
 
                 if m.groupdict()['path']:
                     path_1 = m.groupdict()['path']
-                    m3 = re.compile(r'(?: *(?P<path_inner>[0-9\{\}\s\,]+))?'
+                    m3 = re.compile(r'(?: *(?P<path_inner>[()0-9\{\}\s\,]+))?'
                                     ' +(?P<origin_codes_inner>(i|e|\?|\|))$').match(path_1)
                     if m3:
                         path_data = m3.groupdict()['path_inner']

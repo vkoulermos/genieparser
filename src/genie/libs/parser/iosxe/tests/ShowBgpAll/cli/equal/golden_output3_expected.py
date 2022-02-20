@@ -372,6 +372,47 @@ expected_output = {
                                 },
                             }
                         },
+                        "10.151.9.64/28": {
+                            "index": {
+                                1: {
+                                    "localpref": 100,
+                                    "metric": 0,
+                                    "next_hop": "172.30.33.85",
+                                    "origin_codes": "?",
+                                    "path": "(64600)",
+                                    "status_codes": "*",
+                                    "weight": 0
+                                },
+                                2: {
+                                    "localpref": 100,
+                                    "metric": 0,
+                                    "next_hop": "172.30.33.13",
+                                    "origin_codes": "?",
+                                    "path": "(64615 64630 64600)",
+                                    "status_codes": "*>i",
+                                    "weight": 0
+                                }
+                            }
+                        },
+                        "192.168.79.64/27": {
+                            "index": {
+                                1: {
+                                    "localpref": 100,
+                                    "metric": 0,
+                                    "next_hop": "172.30.33.13",
+                                    "origin_codes": "?",
+                                    "status_codes": "* i",
+                                    "weight": 0
+                                },
+                                2: {
+                                    "metric": 0,
+                                    "next_hop": "0.0.0.0",
+                                    "origin_codes": "?",
+                                    "status_codes": "*>",
+                                    "weight": 32768
+                                }
+                            }
+                        },
                     },
                 }
             }
