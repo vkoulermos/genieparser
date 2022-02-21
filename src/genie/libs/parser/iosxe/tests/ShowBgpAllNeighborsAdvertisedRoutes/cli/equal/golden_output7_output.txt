@@ -1,0 +1,18 @@
+For address family: VPNv4 Unicast
+BGP table version is 5482065, local router ID is 10.250.102.43
+Status codes: s suppressed, d damped, h history, * valid, > best, i - internal,
+              r RIB-failure, S Stale, m multipath, b backup-path, f RT-Filter,
+              x best-external, a additional-path, c RIB-compressed,
+              t secondary path, L long-lived-stale,
+Origin codes: i - IGP, e - EGP, ? - incomplete
+RPKI validation codes: V valid, I invalid, N Not found
+
+     Network          Next Hop            Metric LocPrf Weight Path
+Route Distinguisher: 35432:20 (default for vrf MOBILE_GRX) VRF Router ID 10.250.102.43
+ *>   0.0.0.0          192.168.12.168          100    120      0 (64615 64630 64602 64628 64605) 6762 i
+ *>   1.20.122.0/27    192.168.12.168                 120      0 (64615 64628 64603 64629 64601 64630 64609) 6762 35030 56120 72001 i
+ *>   202.179.206.0    192.168.12.168                 120      0 (64615 64628 64603 64629 64601 64630 64609) 6762 6774 64666 64666 64666 i
+ *>   202.191.98.144/29
+                      192.168.12.168                 120      0 (64615 64628 64603 64629 64601 64630 64609) 6762 58453 136255 i
+
+Total number of prefixes 11850
