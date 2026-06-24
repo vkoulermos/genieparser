@@ -53,6 +53,8 @@ class ShowModuleSchema(MetaParser):
                 Optional("hardware"): str,
                 Optional("mac_address"): str,
                 Optional("serial_number"): str,
+                Optional("online_diag_status"): str,
+                Optional("slot/world_wide_name"): str,
             }
         },
         Optional("lem"): {
@@ -108,6 +110,7 @@ class ShowModule(ShowModuleSchema):
         table_header = None
         header_type = None
         lem_hit = False
+        xbr_hit = False
         parse_status = False
         rp_list = []
         map_dic = {}
@@ -117,6 +120,9 @@ class ShowModule(ShowModuleSchema):
 
         # Xbar Ports  Module-Type                         Model              Status
         p2 = re.compile(r"^\s*Xbar.*$")
+
+        # LFM Ports  Module-Type                         Model              Status
+        p2_0 = re.compile(r"^\s*LFM.*$")
 
         # Lem Ports             Module-Type                      Model           Status
         p2_1 = re.compile(r"^\s*Lem.*$")
@@ -172,9 +178,11 @@ class ShowModule(ShowModuleSchema):
                 continue
 
             # Xbar Ports  Module-Type                         Model              Status
-            m = p2.match(line)
-            if m:
+            m1 = p2.match(line)
+            m2 = p2_0.match(line)
+            if m1 or m2:
                 table_header = "xbar"
+                xbr_hit = True
                 if "xbar" not in module_dict:
                     module_dict["xbar"] = {}
                 continue
@@ -310,7 +318,7 @@ class ShowModule(ShowModuleSchema):
                     if m.groupdict()["world_wide_name"]
                     else m.groupdict()["slot"]
                 )
-                if table_header == "slot" and not lem_hit:
+                if table_header == "slot" and not (xbr_hit or lem_hit):
                     if header_number in rp_list:
                         rp_name = map_dic[header_number]
                         module_dict["slot"]["rp"][header_number][rp_name][
@@ -344,7 +352,7 @@ class ShowModule(ShowModuleSchema):
                                 if m.groupdict()["world_wide_name"]
                                 else m.groupdict()["slot"]
                             )
-                elif table_header == "xbar":
+                elif table_header == "xbar" or xbr_hit:
                     module_dict["xbar"][header_number]["software"] = m.groupdict()[
                         "software"
                     ].strip()
@@ -424,6 +432,10 @@ class ShowModule(ShowModuleSchema):
                         module_dict["slot"]["lc"][header_number][lc_name][
                             "online_diag_status"
                         ] = m.groupdict()["online_diag_status"].strip()
+                elif table_header == "xbar":
+                    module_dict["xbar"][header_number][
+                        "online_diag_status"
+                    ] = m.groupdict()["online_diag_status"].strip()
                 elif table_header == "lem":
                     module_dict["lem"][header_number][
                         "online_diag_status"

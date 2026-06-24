@@ -95,6 +95,9 @@
     * show platform hardware slot {slot} sensor producer all
     * show platform hardware slot {slot} sensor consumer all
     * show platform hardware qfp active infra bqs sch output default interface GigabitEthernet0/0/0
+    * show platform hardware qfp active interface if-name GigabitEthernet0/0/0 statistics
+    * show platform hardware qfp active interface if-name GigabitEthernet0/0/0 path
+    * show platform hardware qfp active feature l2bd datapath system
 """
 import re
 import logging
@@ -20679,6 +20682,606 @@ class ShowPlatformHardwareQfpActiveInfrastructureBqsScheduleOutputDefaultInterfa
                 entry["credits"] = int(group["credits"])
                 entry["drops"] = int(group["drops"])
                 entry["state"] = group["state"]
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformHardwareQfpActiveInterfaceIfNameStatisticsSchema(MetaParser):
+    """Schema for show platform hardware qfp active interface if-name {interface} statistics"""
+
+    schema = {
+        "interface": {
+            Any(): {
+                "rx_statistics": {
+                    "packets_received": int,
+                    "bytes_received": int,
+                    "ipv4_packets": int,
+                    "ipv6_packets": int,
+                    "multicast_packets": int,
+                    "broadcast_packets": int,
+                    "drops": int,
+                },
+                "tx_statistics": {
+                    "packets_transmitted": int,
+                    "bytes_transmitted": int,
+                    "ipv4_packets": int,
+                    "ipv6_packets": int,
+                    "multicast_packets": int,
+                    "broadcast_packets": int,
+                    "drops": int,
+                },
+                "qfp_statistics": {
+                    "packets_process_switched": int,
+                    "packets_cef_switched": int,
+                    "packets_punt": int,
+                    "packets_dropped": int,
+                },
+            }
+        }
+    }
+
+
+class ShowPlatformHardwareQfpActiveInterfaceIfNameStatistics(ShowPlatformHardwareQfpActiveInterfaceIfNameStatisticsSchema):
+    """Parser for show platform hardware qfp active interface if-name {interface} statistics"""
+
+    cli_command = "show platform hardware qfp active interface if-name {interface} statistics"
+
+    def cli(self, interface="", output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command.format(interface=interface))
+        else:
+            out = output
+
+        ret_dict = {}
+        if not out:
+            return ret_dict
+
+        stats_dict = None
+
+        # Interface: GigabitEthernet0/0/0
+        p1 = re.compile(r"^Interface\s*:\s*(?P<intf>\S+)$")
+
+        # RX Statistics
+        p2 = re.compile(r"^RX\s+Statistics$")
+
+        # TX Statistics
+        p10 = re.compile(r"^TX\s+Statistics$")
+
+        # QFP Statistics
+        p13 = re.compile(r"^QFP\s+Statistics$")
+
+        # Packets Received                  : 12547892
+        p3 = re.compile(r"^Packets\s+Received\s*:\s*(?P<packets_received>\d+)$")
+
+        # Bytes Received                    : 9876543210
+        p4 = re.compile(r"^Bytes\s+Received\s*:\s*(?P<bytes_received>\d+)$")
+
+        # IPv4 Packets                      : 10234567
+        p5 = re.compile(r"^IPv4\s+Packets\s*:\s*(?P<ipv4_packets>\d+)$")
+
+        # IPv6 Packets                      : 1456789
+        p6 = re.compile(r"^IPv6\s+Packets\s*:\s*(?P<ipv6_packets>\d+)$")
+
+        # Multicast Packets                 : 45678
+        p7 = re.compile(r"^Multicast\s+Packets\s*:\s*(?P<multicast_packets>\d+)$")
+
+        # Broadcast Packets                 : 12345
+        p8 = re.compile(r"^Broadcast\s+Packets\s*:\s*(?P<broadcast_packets>\d+)$")
+
+        # Drops                             : 12
+        p9 = re.compile(r"^Drops\s*:\s*(?P<drops>\d+)$")
+
+        # Packets Transmitted               : 12499871
+        p11 = re.compile(r"^Packets\s+Transmitted\s*:\s*(?P<packets_transmitted>\d+)$")
+
+        # Bytes Transmitted                 : 9765432109
+        p12 = re.compile(r"^Bytes\s+Transmitted\s*:\s*(?P<bytes_transmitted>\d+)$")
+
+        # Packets Process Switched          : 2345
+        p14 = re.compile(r"^Packets\s+Process\s+Switched\s*:\s*(?P<packets_process_switched>\d+)$")
+
+        # Packets CEF Switched              : 24999871
+        p15 = re.compile(r"^Packets\s+CEF\s+Switched\s*:\s*(?P<packets_cef_switched>\d+)$")
+
+        # Packets Punt                      : 45
+        p16 = re.compile(r"^Packets\s+Punt\s*:\s*(?P<packets_punt>\d+)$")
+
+        # Packets Dropped                   : 15
+        p17 = re.compile(r"^Packets\s+Dropped\s*:\s*(?P<packets_dropped>\d+)$")
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Interface: GigabitEthernet0/0/0
+            m = p1.match(line)
+            if m:
+                intf_dict = ret_dict.setdefault("interface", {}).setdefault(
+                    m.group("intf"), {}
+                )
+                stats_dict = None
+                continue
+
+            # RX Statistics
+            m = p2.match(line)
+            if m:
+                stats_dict = intf_dict.setdefault("rx_statistics", {})
+                continue
+
+            # TX Statistics
+            m = p10.match(line)
+            if m:
+                stats_dict = intf_dict.setdefault("tx_statistics", {})
+                continue
+
+            # QFP Statistics
+            m = p13.match(line)
+            if m:
+                stats_dict = intf_dict.setdefault("qfp_statistics", {})
+                continue
+
+            if stats_dict is None:
+                continue
+
+            # Packets Received                  : 12547892
+            m = p3.match(line)
+            if m:
+                stats_dict["packets_received"] = int(m.group("packets_received"))
+                continue
+
+            # Bytes Received                    : 9876543210
+            m = p4.match(line)
+            if m:
+                stats_dict["bytes_received"] = int(m.group("bytes_received"))
+                continue
+
+            # IPv4 Packets                      : 10234567
+            m = p5.match(line)
+            if m:
+                stats_dict["ipv4_packets"] = int(m.group("ipv4_packets"))
+                continue
+
+            # IPv6 Packets                      : 1456789
+            m = p6.match(line)
+            if m:
+                stats_dict["ipv6_packets"] = int(m.group("ipv6_packets"))
+                continue
+
+            # Multicast Packets                 : 45678
+            m = p7.match(line)
+            if m:
+                stats_dict["multicast_packets"] = int(m.group("multicast_packets"))
+                continue
+
+            # Broadcast Packets                 : 12345
+            m = p8.match(line)
+            if m:
+                stats_dict["broadcast_packets"] = int(m.group("broadcast_packets"))
+                continue
+
+            # Drops                             : 12
+            m = p9.match(line)
+            if m:
+                stats_dict["drops"] = int(m.group("drops"))
+                continue
+
+            # Packets Transmitted               : 12499871
+            m = p11.match(line)
+            if m:
+                stats_dict["packets_transmitted"] = int(m.group("packets_transmitted"))
+                continue
+
+            # Bytes Transmitted                 : 9765432109
+            m = p12.match(line)
+            if m:
+                stats_dict["bytes_transmitted"] = int(m.group("bytes_transmitted"))
+                continue
+
+            # Packets Process Switched          : 2345
+            m = p14.match(line)
+            if m:
+                stats_dict["packets_process_switched"] = int(
+                    m.group("packets_process_switched")
+                )
+                continue
+
+            # Packets CEF Switched              : 24999871
+            m = p15.match(line)
+            if m:
+                stats_dict["packets_cef_switched"] = int(m.group("packets_cef_switched"))
+                continue
+
+            # Packets Punt                      : 45
+            m = p16.match(line)
+            if m:
+                stats_dict["packets_punt"] = int(m.group("packets_punt"))
+                continue
+
+            # Packets Dropped                   : 15
+            m = p17.match(line)
+            if m:
+                stats_dict["packets_dropped"] = int(m.group("packets_dropped"))
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformHardwareQfpActiveInterfaceIfNamePathSchema(MetaParser):
+    """Schema for show platform hardware qfp active interface if-name {interface} path"""
+
+    schema = {
+        "interface": {
+            Any(): {
+                "interface_index": int,
+                "qfp_interface": str,
+                "state": str,
+                "ingress_path": {
+                    "rx_path": str,
+                    "feature_path": str,
+                    "adjacency_type": str,
+                    "rewrite_type": str,
+                },
+                "egress_path": {
+                    "tx_path": str,
+                    "output_feature": str,
+                    "encapsulation": str,
+                    "mtu": int,
+                },
+                "statistics": {
+                    "packets_in_path": int,
+                    "packets_out_path": int,
+                    "packets_dropped": int,
+                },
+            }
+        }
+    }
+
+
+class ShowPlatformHardwareQfpActiveInterfaceIfNamePath(ShowPlatformHardwareQfpActiveInterfaceIfNamePathSchema):
+    """Parser for show platform hardware qfp active interface if-name {interface} path"""
+
+    cli_command = "show platform hardware qfp active interface if-name {interface} path"
+
+    def cli(self, interface="", output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command.format(interface=interface))
+        else:
+            out = output
+
+        ret_dict = {}
+        if not out:
+            return ret_dict
+
+        # Interface Name : GigabitEthernet0/0/0
+        p1 = re.compile(r"^\s*Interface Name\s*:\s*(?P<interface>\S+)\s*$")
+
+        # Interface Index: 12
+        p2 = re.compile(r"^\s*Interface Index\s*:\s*(?P<interface_index>\d+)\s*$")
+
+        # QFP Interface  : 0x45
+        p3 = re.compile(r"^\s*QFP Interface\s*:\s*(?P<qfp_interface>\S+)\s*$")
+
+        # State          : UP
+        p4 = re.compile(r"^\s*State\s*:\s*(?P<state>\S+)\s*$")
+
+        # Ingress Path
+        p5 = re.compile(r"^\s*Ingress Path\s*$")
+
+        # RX Path        : QFP_RX
+        p6 = re.compile(r"^\s*RX Path\s*:\s*(?P<rx_path>\S+)\s*$")
+
+        # Feature Path   : IPv4 CEF
+        p7 = re.compile(r"^\s*Feature Path\s*:\s*(?P<feature_path>.+?)\s*$")
+
+        # Adjacency Type : Connected
+        p8 = re.compile(r"^\s*Adjacency Type\s*:\s*(?P<adjacency_type>.+?)\s*$")
+
+        # Rewrite Type   : Ethernet
+        p9 = re.compile(r"^\s*Rewrite Type\s*:\s*(?P<rewrite_type>.+?)\s*$")
+
+        # Egress Path
+        p10 = re.compile(r"^\s*Egress Path\s*$")
+
+        # TX Path        : QFP_TX
+        p11 = re.compile(r"^\s*TX Path\s*:\s*(?P<tx_path>\S+)\s*$")
+
+        # Output Feature : QoS
+        p12 = re.compile(r"^\s*Output Feature\s*:\s*(?P<output_feature>.+?)\s*$")
+
+        # Encapsulation  : ARPA
+        p13 = re.compile(r"^\s*Encapsulation\s*:\s*(?P<encapsulation>\S+)\s*$")
+
+        # MTU            : 1500
+        p14 = re.compile(r"^\s*MTU\s*:\s*(?P<mtu>\d+)\s*$")
+
+        # Statistics
+        p15 = re.compile(r"^\s*Statistics\s*$")
+
+        # Packets In Path        : 12457892
+        p16 = re.compile(r"^\s*Packets In Path\s*:\s*(?P<packets_in_path>\d+)\s*$")
+
+        # Packets Out Path       : 12399871
+        p17 = re.compile(r"^\s*Packets Out Path\s*:\s*(?P<packets_out_path>\d+)\s*$")
+
+        # Packets Dropped        : 15
+        p18 = re.compile(r"^\s*Packets Dropped\s*:\s*(?P<packets_dropped>\d+)\s*$")
+
+        current_section = None
+        interface_name = None
+        interface_dict = None
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Interface Name : GigabitEthernet0/0/0
+            m = p1.match(line)
+            if m:
+                interface_name = m.group("interface")
+                interface_dict = ret_dict.setdefault("interface", {}).setdefault(
+                    interface_name, {}
+                )
+                continue
+
+            # Interface Index: 12
+            m = p2.match(line)
+            if m and interface_dict is not None:
+                interface_dict["interface_index"] = int(m.group("interface_index"))
+                continue
+
+            # QFP Interface  : 0x45
+            m = p3.match(line)
+            if m and interface_dict is not None:
+                interface_dict["qfp_interface"] = m.group("qfp_interface")
+                continue
+
+            # State          : UP
+            m = p4.match(line)
+            if m and interface_dict is not None:
+                interface_dict["state"] = m.group("state")
+                continue
+
+            # Ingress Path
+            m = p5.match(line)
+            if m and interface_dict is not None:
+                interface_dict.setdefault("ingress_path", {})
+                current_section = "ingress_path"
+                continue
+
+            # RX Path        : QFP_RX
+            m = p6.match(line)
+            if m and interface_dict is not None and current_section == "ingress_path":
+                interface_dict["ingress_path"]["rx_path"] = m.group("rx_path")
+                continue
+
+            # Feature Path   : IPv4 CEF
+            m = p7.match(line)
+            if m and interface_dict is not None and current_section == "ingress_path":
+                interface_dict["ingress_path"]["feature_path"] = m.group("feature_path")
+                continue
+
+            # Adjacency Type : Connected
+            m = p8.match(line)
+            if m and interface_dict is not None and current_section == "ingress_path":
+                interface_dict["ingress_path"]["adjacency_type"] = m.group(
+                    "adjacency_type"
+                )
+                continue
+
+            # Rewrite Type   : Ethernet
+            m = p9.match(line)
+            if m and interface_dict is not None and current_section == "ingress_path":
+                interface_dict["ingress_path"]["rewrite_type"] = m.group("rewrite_type")
+                continue
+
+            # Egress Path
+            m = p10.match(line)
+            if m and interface_dict is not None:
+                interface_dict.setdefault("egress_path", {})
+                current_section = "egress_path"
+                continue
+
+            # TX Path        : QFP_TX
+            m = p11.match(line)
+            if m and interface_dict is not None and current_section == "egress_path":
+                interface_dict["egress_path"]["tx_path"] = m.group("tx_path")
+                continue
+
+            # Output Feature : QoS
+            m = p12.match(line)
+            if m and interface_dict is not None and current_section == "egress_path":
+                interface_dict["egress_path"]["output_feature"] = m.group(
+                    "output_feature"
+                )
+                continue
+
+            # Encapsulation  : ARPA
+            m = p13.match(line)
+            if m and interface_dict is not None and current_section == "egress_path":
+                interface_dict["egress_path"]["encapsulation"] = m.group(
+                    "encapsulation"
+                )
+                continue
+
+            # MTU            : 1500
+            m = p14.match(line)
+            if m and interface_dict is not None and current_section == "egress_path":
+                interface_dict["egress_path"]["mtu"] = int(m.group("mtu"))
+                continue
+
+            # Statistics
+            m = p15.match(line)
+            if m and interface_dict is not None:
+                interface_dict.setdefault("statistics", {})
+                current_section = "statistics"
+                continue
+
+            # Packets In Path        : 12457892
+            m = p16.match(line)
+            if m and interface_dict is not None and current_section == "statistics":
+                interface_dict["statistics"]["packets_in_path"] = int(
+                    m.group("packets_in_path")
+                )
+                continue
+
+            # Packets Out Path       : 12399871
+            m = p17.match(line)
+            if m and interface_dict is not None and current_section == "statistics":
+                interface_dict["statistics"]["packets_out_path"] = int(
+                    m.group("packets_out_path")
+                )
+                continue
+
+            # Packets Dropped        : 15
+            m = p18.match(line)
+            if m and interface_dict is not None and current_section == "statistics":
+                interface_dict["statistics"]["packets_dropped"] = int(
+                    m.group("packets_dropped")
+                )
+                continue
+
+        return ret_dict
+
+
+
+
+class ShowPlatformHardwareQfpActiveFeatureL2bdDatapathSystemSchema(MetaParser):
+    """Schema for show platform hardware qfp active feature l2bd datapath system"""
+
+    schema = {
+        "qfp": {
+            "l2bd": {
+                "datapath": {
+                    "system": {
+                        "system_mac_addr_learning_limit": int,
+                        "unknown_mac_when_reaching_learning_limit": str,
+                        "total_mac_entries": int,
+                        "bdi_mac_entries": int,
+                        "free_entries": int,
+                        "mac_flush_in_progress": int,
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowPlatformHardwareQfpActiveFeatureL2bdDatapathSystem(ShowPlatformHardwareQfpActiveFeatureL2bdDatapathSystemSchema):
+    """Parser for show platform hardware qfp active feature l2bd datapath system"""
+
+    cli_command = "show platform hardware qfp active feature l2bd datapath system"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        system_dict = None
+
+        # QFP L2BD data path information:
+        p1 = re.compile(r"^QFP\s+L2BD\s+data\s+path\s+information\s*:\s*$")
+
+        #   System MAC addr learning limit: 131072;
+        p2 = re.compile(
+            r"^\s*System\s+MAC\s+addr\s+learning\s+limit\s*:\s*(?P<limit>\d+)\s*;\s*$"
+        )
+
+        #   Unknown mac when reaching learning limit: Flood;
+        p3 = re.compile(
+            r"^\s*Unknown\s+mac\s+when\s+reaching\s+learning\s+limit\s*:\s*(?P<unknown>[^;]+)\s*;\s*$"
+        )
+
+        #   Total mac entries: 131072;   BDI mac entries: 0;
+        p4 = re.compile(
+            r"^\s*Total\s+mac\s+entries\s*:\s*(?P<total>\d+)\s*;\s*BDI\s+mac\s+entries\s*:\s*(?P<bdi>\d+)\s*;\s*$"
+        )
+
+        #   Free entries: 0;
+        p5 = re.compile(r"^\s*Free\s+entries\s*:\s*(?P<free>\d+)\s*;\s*$")
+
+        #   MAC flush in progress: 0;
+        p6 = re.compile(
+            r"^\s*MAC\s+flush\s+in\s+progress\s*:\s*(?P<flush>\d+)\s*;\s*$"
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # QFP L2BD data path information:
+            m = p1.match(line)
+            if m:
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                datapath_dict = l2bd_dict.setdefault("datapath", {})
+                system_dict = datapath_dict.setdefault("system", {})
+                continue
+
+            #   System MAC addr learning limit: 131072;
+            m = p2.match(line)
+            if m:
+                if system_dict is None:
+                    qfp_dict = ret_dict.setdefault("qfp", {})
+                    l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                    datapath_dict = l2bd_dict.setdefault("datapath", {})
+                    system_dict = datapath_dict.setdefault("system", {})
+                group = m.groupdict()
+                system_dict["system_mac_addr_learning_limit"] = int(group["limit"])
+                continue
+
+            #   Unknown mac when reaching learning limit: Flood;
+            m = p3.match(line)
+            if m:
+                if system_dict is None:
+                    qfp_dict = ret_dict.setdefault("qfp", {})
+                    l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                    datapath_dict = l2bd_dict.setdefault("datapath", {})
+                    system_dict = datapath_dict.setdefault("system", {})
+                group = m.groupdict()
+                system_dict[
+                    "unknown_mac_when_reaching_learning_limit"
+                ] = group["unknown"].strip()
+                continue
+
+            #   Total mac entries: 131072;   BDI mac entries: 0;
+            m = p4.match(line)
+            if m:
+                if system_dict is None:
+                    qfp_dict = ret_dict.setdefault("qfp", {})
+                    l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                    datapath_dict = l2bd_dict.setdefault("datapath", {})
+                    system_dict = datapath_dict.setdefault("system", {})
+                group = m.groupdict()
+                system_dict["total_mac_entries"] = int(group["total"])
+                system_dict["bdi_mac_entries"] = int(group["bdi"])
+                continue
+
+            #   Free entries: 0;
+            m = p5.match(line)
+            if m:
+                if system_dict is None:
+                    qfp_dict = ret_dict.setdefault("qfp", {})
+                    l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                    datapath_dict = l2bd_dict.setdefault("datapath", {})
+                    system_dict = datapath_dict.setdefault("system", {})
+                group = m.groupdict()
+                system_dict["free_entries"] = int(group["free"])
+                continue
+
+            #   MAC flush in progress: 0;
+            m = p6.match(line)
+            if m:
+                if system_dict is None:
+                    qfp_dict = ret_dict.setdefault("qfp", {})
+                    l2bd_dict = qfp_dict.setdefault("l2bd", {})
+                    datapath_dict = l2bd_dict.setdefault("datapath", {})
+                    system_dict = datapath_dict.setdefault("system", {})
+                group = m.groupdict()
+                system_dict["mac_flush_in_progress"] = int(group["flush"])
                 continue
 
         return ret_dict

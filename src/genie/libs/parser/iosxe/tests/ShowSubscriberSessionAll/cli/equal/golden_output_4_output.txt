@@ -1,0 +1,13 @@
+show subscriber session all
+
+Current Subscriber Information: Total sessions 1
+--------------------------------------------------
+Type: IPv4/IPv6, UID: 915, State: authen, Identity: aaaa.bbbb.cccc
+IPv4 Address: 11.11.11.2
+IPv6 Address: 8001::
+
+Policy information:
+  Rules, actions and conditions executed:
+    subscriber rule-map TAL
+      condition always event session-start
+        10 authorize identifier mac-address

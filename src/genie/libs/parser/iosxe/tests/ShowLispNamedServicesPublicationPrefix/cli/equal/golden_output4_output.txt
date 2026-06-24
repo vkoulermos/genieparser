@@ -1,0 +1,35 @@
+iolpxtr11#show lisp locator-table default instance-id 4 named-services publication firewall     
+Publication Information for LISP 0 EID-table N/A (IID 4)
+ * Indicates the selected rlocs used by consumers
+
+  EID-prefix: firewall
+    First published:      00:25:26
+    Last published:       00:25:26
+    State:                complete
+    Exported to:          local-eid, map-cache
+
+    Publisher 100.44.44.44:4342
+      last published 00:25:26, TTL never, Expires: never
+      publisher epoch 0, entry epoch 0
+      entry-state complete
+      xTR-ID 0x448314C7-0xDE55C581-0xB1535180-0x5ABD34BD
+      site-ID unspecified
+      Domain-ID 1
+      Multihoming-ID unspecified
+      Locator       Pri/Wgt  State     Encap-IID  RDP             
+      100.11.11.11   10/50   up        -          [-]
+
+    Publisher 100.55.55.55:4342
+      last published 00:25:26, TTL never, Expires: never
+      publisher epoch 0, entry epoch 0
+      entry-state complete
+      xTR-ID 0x448314C7-0xDE55C581-0xB1535180-0x5ABD34BD
+      site-ID unspecified
+      Domain-ID 1
+      Multihoming-ID unspecified
+      Locator       Pri/Wgt  State     Encap-IID  RDP             
+      100.11.11.11   10/50   up        -          [-]
+
+  Merge Locator Information
+      Locator        Pri/Wgt  State     Encap-IID  RDP-Len Src-Address 
+      100.11.11.11*   10/50   up        -          0       100.44.44.44 

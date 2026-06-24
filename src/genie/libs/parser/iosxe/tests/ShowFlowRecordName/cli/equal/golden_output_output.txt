@@ -1,0 +1,28 @@
+
+flow record mpls-bt:
+  Description:        User defined
+  No. of users:       1
+  Total field space:  85 bytes
+  Fields:
+    match ipv4 ttl
+    match ipv4 source address
+    match ipv4 destination address
+    match ipv6 flow-label
+    match ipv6 protocol
+    match ipv6 source address
+    match ipv6 destination address
+    match transport source-port
+    match transport destination-port
+    match interface input
+    match mpls label 1 ttl
+    match mpls label 1 exp
+    match mpls label 1 type
+    match mpls label 1 details
+    match routing pw destination address
+    collect ipv6 version
+    collect ipv6 traffic-class
+    collect interface output
+    collect counter bytes
+    collect counter packets
+    collect timestamp sys-uptime first
+    collect timestamp sys-uptime last

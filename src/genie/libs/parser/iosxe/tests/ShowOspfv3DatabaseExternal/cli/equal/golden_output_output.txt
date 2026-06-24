@@ -1,0 +1,112 @@
+show ospfv3 database external
+
+          OSPFv3 100 address-family ipv4 (router-id 3.3.3.3)
+
+		Type-5 AS External Link States
+
+  LS age: 124
+  LS Type: AS External Link
+  Link State ID: 0
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0xAC0B
+  Length: 36
+  Prefix Address: 10.30.0.1
+  Prefix Length: 32, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 20 
+  External Route Tag: 3300
+
+  LS age: 92
+  LS Type: AS External Link
+  Link State ID: 1
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0x9FF8
+  Length: 32
+  Prefix Address: 10.50.0.0
+  Prefix Length: 24, Options: None
+  Metric Type: 1 (Comparable directly to link state metric)
+  Metric: 33 
+
+  LS age: 42
+  LS Type: AS External Link
+  Link State ID: 5
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0x8A73
+  Length: 32
+  Prefix Address: 10.200.0.1
+  Prefix Length: 32, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 20 
+
+  LS age: 22
+  LS Type: AS External Link
+  Link State ID: 7
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000001
+  Checksum: 0xAED9
+  Length: 36
+  Prefix Address: 10.100.0.1
+  Prefix Length: 32, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 1 
+  External Route Tag: 65001
+
+
+          OSPFv3 100 address-family ipv6 (router-id 3.3.3.3)
+
+		Type-5 AS External Link States
+
+  LS age: 125
+  LS Type: AS External Link
+  Link State ID: 1
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0x3B4D
+  Length: 48
+  Prefix Address: 2001:DB8:300::1
+  Prefix Length: 128, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 20 
+  External Route Tag: 3300
+
+  LS age: 92
+  LS Type: AS External Link
+  Link State ID: 2
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0x6A51
+  Length: 36
+  Prefix Address: 2001:DB8:500::
+  Prefix Length: 64, Options: None
+  Metric Type: 1 (Comparable directly to link state metric)
+  Metric: 33 
+
+  LS age: 42
+  LS Type: AS External Link
+  Link State ID: 5
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000003
+  Checksum: 0xC8B2
+  Length: 44
+  Prefix Address: 2001:DB8:200::1
+  Prefix Length: 128, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 20 
+
+  LS age: 22
+  LS Type: AS External Link
+  Link State ID: 7
+  Advertising Router: 2.2.2.2
+  LS Seq Number: 80000001
+  Checksum: 0x7131
+  Length: 48
+  Prefix Address: 2001:DB8:100::1
+  Prefix Length: 128, Options: None
+  Metric Type: 2 (Larger than any link state path)
+  Metric: 1 
+  External Route Tag: 65001
+
+iolR3#

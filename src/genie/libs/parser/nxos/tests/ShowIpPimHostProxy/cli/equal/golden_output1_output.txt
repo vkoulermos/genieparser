@@ -1,0 +1,4 @@
+PIM host proxy interfaces
+==========================
+Type: SG - Host SG Proxy, H - Host Proxy 
+Vlan70(H)       port-channel10.40(SG)    Ethernet1/1.40(H)

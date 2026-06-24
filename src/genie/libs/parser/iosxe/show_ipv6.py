@@ -4202,6 +4202,9 @@ class ShowIpv6InterfaceBriefSchema(MetaParser):
                 "protocol_state": str,
                 "link_local_address": str,
                 "ipv6_addresses": ListOf(str),
+                Optional("unnumbered"): {
+                    "interface_ref": str,
+                },
             }
         }
     }
@@ -4257,6 +4260,8 @@ class ShowIpv6InterfaceBrief(ShowIpv6InterfaceBriefSchema):
 	# Group:
 	#   ipv6 -> IPv6 address
         p3 = re.compile(r'^\s*(?P<ipv6>\S+)$')
+        #     unnumbered (TenGigabitEthernet0/0/4)
+        p4 = re.compile(r'^\s*unnumbered +\((?P<interface_ref>[\w\/\.\-]+)\)$')
 
         current_intf = None
 
@@ -4285,6 +4290,15 @@ class ShowIpv6InterfaceBrief(ShowIpv6InterfaceBriefSchema):
             m = p2.match(line)
             if m:
                 # No addresses assigned for current interface
+                continue
+
+            #     unnumbered (TenGigabitEthernet0/0/4)
+            m = p4.match(line)
+            if m and current_intf:
+                interface_ref = m.groupdict()["interface_ref"]
+                ret_dict["interface"][current_intf]["unnumbered"] = {
+                    "interface_ref": Common.convert_intf_name(interface_ref)
+                }
                 continue
 
             #     FE80::C6B2:39FF:FEFB:DC40

@@ -1,0 +1,11 @@
+NAME: "Switch 1 Chassis", DESCR: "Cisco C9550-48L4CD Chassis"
+PID: C9550-48L4CD      , VID: V00  , SN: FDO29250F16
+
+NAME: "Switch 1 Slot 1 Supervisor", DESCR: "Cisco 9550-48L4CD Switch"
+PID: C9550-48L4CD      , VID: V00  , SN: FDO29250F16
+
+NAME: "Switch 2 Chassis", DESCR: "Cisco C9550-48L4CD Chassis"
+PID: C9550-48L4CD      , VID: V00  , SN: FDO29250E66
+
+NAME: "Switch 2 Slot 1 Supervisor", DESCR: "Cisco 9550-48L4CD Switch"
+PID: C9550-48L4CD      , VID: V00  , SN: FDO29250E66

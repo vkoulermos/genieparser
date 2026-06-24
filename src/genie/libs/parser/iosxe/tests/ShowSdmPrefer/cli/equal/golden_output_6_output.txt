@@ -1,0 +1,26 @@
+Showing SDM Template Info
+
+This is the Advanced template.
+  Number of VLANs:                                     1024
+  Unicast MAC addresses:                               16384
+  Overflow Unicast MAC addresses:                      256
+  L2 Multicast entries:                                1024
+  L3 Multicast entries:                                1024
+  Overflow L3 Multicast entries:                       256
+  Directly connected routes:                           8192
+  Indirect routes:                                     3072
+  Security Access Control Entries:                     1408
+  QoS Access Control Entries:                          1024
+  Policy Based Routing ACEs:                           512
+  Netflow Input ACEs:                                  128
+  Netflow Output ACEs:                                 128
+  Flow SPAN ACEs:                                      256
+  Tunnels:                                             128
+  LISP Instance Mapping Entries:                       128
+  Control Plane Entries:                               512
+  Input Netflow flows:                                 8192
+  Output Netflow flows:                                8192
+  SGT/DGT (or) MPLS VPN entries:                       2048
+  SGT/DGT (or) MPLS VPN Overflow entries:              256
+  Wired clients:                                       2048
+  MACSec SPD Entries:                                  128

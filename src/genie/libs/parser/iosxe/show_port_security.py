@@ -306,6 +306,13 @@ class ShowPortSecurityAddressSchema(MetaParser):
                 'mac': str,
                 'type': str,
                 Optional('remaining_age'): str,
+                Optional('mac_addresses'): {
+                    Any(): {
+                        'vlan': int,
+                        'type': str,
+                        Optional('remaining_age'): str,
+                    }
+                },
             }
         },
         'total_addr_in_system': int,
@@ -341,9 +348,18 @@ class ShowPortSecurityAddress(ShowPortSecurityAddressSchema):
 
         # initial return dictionary
         ret_dict = {}
+        interface_entries = {}
 
         # 1047    00da.5516.1905    SecureSticky                  Gi3/0/5      -
-        p1 = re.compile(r'(^(?P<vlan>\d+)\s+(?P<mac>[\w\.]+)\s+(?P<type>\w+)\s+(?P<port>[\w\/]+)\s+(?P<remaining_age>[\w\-]+))$')
+        # 100     00aa.bbcc.ddee    SecureDynamic                 Fif1/0/19    5 (I)
+        # 100     00ff.eedd.ccbb    SecureConfigured              Hu1/0/36
+        # *100    00ff.eedd.ccbb    SecureConfigured              HundredGigE1/0/36
+        p1 = re.compile(r'^[\*\s]*(?P<vlan>\d+)\s+'
+                        r'(?P<mac>(?:[0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4}|'
+                        r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})\s+'
+                        r'(?P<type>Secure\w+|\w+)\s+'
+                        r'(?P<port>[A-Za-z][\w\/\.\-]+)'
+                        r'(?:\s+(?P<remaining_age>.*\S))?\s*$')
 
         # Total Addresses in System (excluding one mac per port)     : 0
         p2 = re.compile(r'^Total +Addresses +in +System +\(excluding +one +mac +per +port\)\s+\:\s('
@@ -357,14 +373,16 @@ class ShowPortSecurityAddress(ShowPortSecurityAddressSchema):
             m = p1.match(line)
             if m:
                 group = m.groupdict()
-                intf_dict = ret_dict.setdefault('interfaces', {})
                 interface = group['port']
-                intf_dict[interface] = {}
-                intf_dict[interface]['vlan'] = int(group['vlan'])
-                intf_dict[interface]['mac'] = group['mac']
-                intf_dict[interface]['type'] = group['type']
-                if group['remaining_age'] != '-':
-                    intf_dict[interface]['remaining_age'] = group['remaining_age']
+                entry = {
+                    'vlan': int(group['vlan']),
+                    'mac': group['mac'],
+                    'type': group['type'],
+                }
+                remaining_age = (group.get('remaining_age') or '').strip()
+                if remaining_age and remaining_age != '-':
+                    entry['remaining_age'] = remaining_age
+                interface_entries.setdefault(interface, []).append(entry)
                 continue
             
             # Total Addresses in System (excluding one mac per port)     : 0
@@ -380,6 +398,31 @@ class ShowPortSecurityAddress(ShowPortSecurityAddressSchema):
                 group = m.groupdict()
                 ret_dict['max_addr_limit_in_system'] = int(group['max_addr_limit_in_system'])
                 continue
+
+        if interface_entries:
+            intf_dict = ret_dict.setdefault('interfaces', {})
+            for interface, entries in interface_entries.items():
+                last_entry = entries[-1]
+                intf_entry = {
+                    'vlan': last_entry['vlan'],
+                    'mac': last_entry['mac'],
+                    'type': last_entry['type'],
+                }
+                if 'remaining_age' in last_entry:
+                    intf_entry['remaining_age'] = last_entry['remaining_age']
+
+                if len(entries) > 1:
+                    intf_entry['mac_addresses'] = {}
+                    for entry in entries:
+                        mac_entry = {
+                            'vlan': entry['vlan'],
+                            'type': entry['type'],
+                        }
+                        if 'remaining_age' in entry:
+                            mac_entry['remaining_age'] = entry['remaining_age']
+                        intf_entry['mac_addresses'][entry['mac']] = mac_entry
+
+                intf_dict[interface] = intf_entry
 
         return ret_dict
 

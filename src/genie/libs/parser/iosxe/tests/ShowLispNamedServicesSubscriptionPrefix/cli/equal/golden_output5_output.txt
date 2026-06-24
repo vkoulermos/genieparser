@@ -1,0 +1,8 @@
+iolxtr12#show lisp 0 instance-id 4 named-services subscription detail
+LISP EID Subscriptions for LISP 0 EID-table N/A (IID 4), 1 entries
+
+firewall, Uptime: 00:34:14, Last-change: 00:34:14 
+Source: remote-eid
+Map-server                              State                         
+100.44.44.44                            Subs-Acked                    
+100.55.55.55                            Subs-Acked                    

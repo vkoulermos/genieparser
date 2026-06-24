@@ -1,0 +1,6 @@
+ SSS session identifier 17 -
+
+  Service-policy output: MultiMatchPolicy
+
+    Class-map: class-voice (match-any)
+      Match: access-group name VOICE_TRAFFIC

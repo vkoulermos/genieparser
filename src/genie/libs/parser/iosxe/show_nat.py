@@ -33,6 +33,7 @@ IOSXE parser for the following show commands:
    * show nat64 mappings static key-address {address}
    * show ip nat limits all-host
    * show nat64 routes
+   * show redirect translations | include {ip}
 '''
 # Python
 import re
@@ -2995,3 +2996,83 @@ class ShowNat64Routes(ShowNat64RoutesSchema):
             parsed['nat64_routes'] = nat64_routes_data
         
         return parsed
+
+
+class ShowRedirectTranslationsIncludeIpSchema(MetaParser):
+    """Schema for show redirect translations | include <IP>"""
+
+    schema = {
+        "redirect_translations": {
+            "entries": {
+                Any(): {
+                    "destination_ip": str,
+                    "destination_port": int,
+                    "server_ip": str,
+                    "server_port": int,
+                    "protocol": str,
+                    "in_flags": str,
+                    "out_flags": str,
+                    "timestamp": str
+                }
+            }
+        }
+    }
+
+
+class ShowRedirectTranslationsIncludeIp(ShowRedirectTranslationsIncludeIpSchema):
+    """Parser for show redirect translations | include <IP>"""
+
+    cli_command = "show redirect translations | include {ip}"
+
+    def cli(self, ip="", output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command.format(ip=ip))
+
+        ret_dict = {}
+        index = 1
+
+        # Destination IP/port    Server IP/port         Prot  In Flags  Out Flags  Timestamp
+        p1 = re.compile(r"^Destination\s+IP/port\s+Server\s+IP/port\s+Prot\s+In\s+Flags\s+Out\s+Flags\s+Timestamp$")
+
+        # 10.0.0.11      80     10.0.0.1         8090   TCP   FIN       FIN        Jan 18 2005 10:33:24
+        p2 = re.compile(
+            r"^(?P<destination_ip>\d{1,3}(?:\.\d{1,3}){3})\s+"
+            r"(?P<destination_port>\d+)\s+"
+            r"(?P<server_ip>\d{1,3}(?:\.\d{1,3}){3})\s+"
+            r"(?P<server_port>\d+)\s+"
+            r"(?P<protocol>\S+)\s+"
+            r"(?P<in_flags>\S+)\s+"
+            r"(?P<out_flags>\S+)\s+"
+            r"(?P<timestamp>.+)$"
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Destination IP/port    Server IP/port         Prot  In Flags  Out Flags  Timestamp
+            m = p1.match(line)
+            if m:
+                # Header line, skip
+                continue
+
+            # 10.0.0.11      80     10.0.0.1         8090   TCP   FIN       FIN        Jan 18 2005 10:33:24
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                redirect_dict = ret_dict.setdefault("redirect_translations", {})
+                entries_dict = redirect_dict.setdefault("entries", {})
+                entry = entries_dict.setdefault(index, {})
+                entry["destination_ip"] = group["destination_ip"]
+                entry["destination_port"] = int(group["destination_port"])
+                entry["server_ip"] = group["server_ip"]
+                entry["server_port"] = int(group["server_port"])
+                entry["protocol"] = group["protocol"]
+                entry["in_flags"] = group["in_flags"]
+                entry["out_flags"] = group["out_flags"]
+                entry["timestamp"] = group["timestamp"]
+                index += 1
+                continue
+
+        return ret_dict

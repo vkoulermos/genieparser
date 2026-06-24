@@ -1,0 +1,6 @@
+show vpdn group-select summary
+
+VPDN Group      Vrf        Remote Name   Source-IP       Protocol Direction
+ vg_ip2                                   0.0.0.0         l2tp     request-dialin
+ vg_ip3                                   10.0.0.3        l2tp     request-dialin
+ vg_lts1_ip2    lts1                      10.1.1.2        l2tp     accept-dialin

@@ -1,0 +1,7 @@
+Uplink Autoconfig: Enable
+VlanID   State      L2   Created   Initialized  IPAssign  IPState  Route  Static  Score  Allowed
+1        DONE       Up   No        Yes          (1,0)     (11,0)   (1,0)  (0,0)   (8,0)  (1,1)
+100      NONE       Up   Yes       No           (0,0)     (0,0)    (0,0)  (0,0)   (0,0)  (1,1)
+110      DONE       Up   No        Yes          (1,1)     (9,9)    (0,0)  (0,0)   (4,4)  (1,1)
+120      DONE       Up   No        Yes          (1,1)     (9,9)    (0,0)  (0,0)   (4,4)  (1,1)
+130      DONE       Up   No        Yes          (1,1)     (9,9)    (0,0)  (0,0)   (4,4)  (1,1)

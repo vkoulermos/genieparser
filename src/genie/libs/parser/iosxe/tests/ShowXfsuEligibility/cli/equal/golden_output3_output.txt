@@ -1,0 +1,21 @@
+xFSU supported:                          Yes
+
+Eligibility Check                        Status
+=================                        ======
+Autoboot Enabled:                        Yes
+Install Mode:                            Yes
+Advantage License:                       Yes
+Full ring stack:                         Yes
+Supported FPGA:                          Yes
+BFD:                                     Yes
+Spanning Tree:                           Eligible
+
+SSO Mode:                                Yes
+Note: If 'SSO mode' status is 'No', please wait until condition is met, then proceed
+
+XFSU Eligibility Summary
+========================
+XFSU Eligibility:                        ELIGIBLE
+========================
+
+NOTE: If upgrade is done to an incompatible image, XFSU will fail

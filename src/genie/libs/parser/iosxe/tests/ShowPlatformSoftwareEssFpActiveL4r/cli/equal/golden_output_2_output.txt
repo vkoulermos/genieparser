@@ -1,0 +1,6 @@
+show platform software ess fp active l4r
+Subscriber L4redirect records: Total  : 0
+
+Segment                                  ClassIn     ClassOut    EVSI
+SrvIP                                    SrvPort     QFP Hdl     AOM State
+-------------------------------------------------------------------------------

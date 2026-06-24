@@ -1,0 +1,16 @@
+sh lisp all in 4 named-services server
+
+================================================
+Output for router lisp 0
+================================================
+LISP Site Registration Information
+* = Some locators are down or unreachable
+# = Some registrations are sourced by reliable transport
+
+Site Name      Last      Up     Who Last              Inst     EID Prefix
+               Register         Registered            ID       
+site1          00:02:40  yes#   100.22.22.22:20055    4        default-forwarder
+               00:02:36  yes#   100.11.11.11:34584    4        dual-stack
+               00:02:36  yes#   100.11.11.11:34584    4        firewall
+               00:02:40  yes#   100.22.22.22:20055    4        internet
+               never     no     --                    4        named-services

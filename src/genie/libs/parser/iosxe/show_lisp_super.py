@@ -428,21 +428,23 @@ class ShowLispSiteSuperParser(ShowLispSiteSuperParserSchema):
         #                Register         Registered           ID
         # Shire          never     no     --                   0        1.1.1.0/24
         #                00:00:06  yes*#  11.11.11.11:29972    10       2001:DB8::2/128
+        # firewall       00:00:06  yes*#  11.11.11.11:29972    4        firewall
         p2 = re.compile(r'^((?P<site_name>\S+)\s+)?(?P<last_registered>\S+)\s+'
                         r'(?P<up>yes|no)\*?#?\s+(?P<who_last_registered>\S+)\s+'
                         r'(?P<instance_id>\d+)\s+(?P<eid_prefix>\d{1,3}\.'
                         r'\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}'
-                        r'|any-mac|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})$')
+                        r'|any-mac|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)$')
 
         # Site Name      Last      Up     Who Last             Inst     EID Prefix
         #                Register         Registered           ID
         # Shire          00:00:06  yes*#  1000:1000:1000:1000:1000:1000:1000:1000
         #                                                      10       2001:DB8::2/128
+        # firewall       00:00:06  yes*#  11.11.11.11:29972    4        firewall
         p3_1 = re.compile(r'^((?P<site_name>\S+)\s+)?(?P<last_registered>\S+)\s+'
                           r'(?P<up>yes|no)\*?#?\s+(?P<who_last_registered>\S+)$')
         p3_2 = re.compile(r'^(?P<instance_id>\d+)\s+(?P<eid_prefix>\d{1,3}\.'
                           r'\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}'
-                          r'|any-mac|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})$')
+                          r'|any-mac|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)$')
 
         current_prefix_dict = {}
         for line in output.splitlines():
@@ -1204,14 +1206,17 @@ class ShowLispPublicationPrefixSuperParser(ShowLispPublicationPrefixSchema):
         count = 0
 
         # Publication Information for LISP 0 EID-table vrf red (IID 4100)
+
+        # Publication Information for LISP 0 EID-table N/A (IID 4)
         p1 = re.compile(r"^Publication\s+Information\s+for\s+LISP\s+"
-                        r"(?P<lisp_id>\d+)\s+EID-table\s+vrf\s+\S+\s+"
+                        r"(?P<lisp_id>\d+)\s+EID-table\s+(?:vrf\s+)?\S+\s+"
                         r"\(IID\s+(?P<instance_id>\d+)\)$")
 
         # EID-prefix: 192.168.1.71/32
         # EID-prefix: 2001:172:168:1::/64
+        # EID-prefix: firewall (DN string for named-services, no dots or colons)
         p2 = re.compile(r"^EID-prefix:\s+(?P<eid_prefixes>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}"
-                        r"|[a-fA-F\d\:]+\/\d{1,3})|([a-fA-F\d\:]+\/\d{1,3}))$")
+                        r"|[a-fA-F\d\:]+\/\d{1,3})|([a-fA-F\d\:]+\/\d{1,3})|[^\s\.\:,]+)$")
 
         # First published:      03:05:56
         p3 = re.compile(r"^First\s+published:\s+(?P<first_published>\S+)$")
@@ -1794,9 +1799,11 @@ class ShowLispSubscriptionSuperParser(ShowLispSubscriptionSchema):
         #2.2.2.0/24                              remote-eid,eid-watch           00:01:58    00:01:58
         #172.168.0.0/16                          remote-eid                     20:53:49    20:53:49
         #aaaa.aaaa.aaaa/48                       remote-eid                     20:53:49    20:53:49
+        #firewall                                remote-eid                     00:00:17    00:00:17
         p2 = re.compile(r"^(?P<eid_prefix>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})\s+"
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|"
+                        r"[^\s\.:,]+)\s+"
                         r"(?P<source>\S+)\s+"
                         r"(?P<created>\S+)\s+(?P<last_update>\S+)$")
 
@@ -1887,9 +1894,11 @@ class ShowLispSubscriptionPrefixSuperParser(ShowLispSubscriptionPrefixSchema):
                         r"\(IID\s+(?P<instance_id>\d+)\),\s+(?P<entries>\d+)\s+entries$")
 
         # 172.168.0.0/16, Uptime: 00:01:15, Last-change: 00:01:15
+        # firewall, Uptime: 00:01:15, Last-change: 00:01:15
         p2 = re.compile(r"^(?P<eid_prefix>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}),\sUptime:\s+"
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|"
+                        r"[^\s\.:,]+),\sUptime:\s+"
                         r"(?P<up_time>\S+),\sLast-change:\s+(?P<last_change>\S+)$")
 
         # Source: remote-eid
@@ -2439,9 +2448,10 @@ class ShowLispSiteDetailSuperParser(ShowLispSiteDetailSuperParserSchema):
         # EID-prefix: 2001:192:168:1::1/64 instance-id 0
         # EID-prefix: aabb.cc00.c901/48 instance-id 101
         # EID-prefix: any-mac instance-id 101
+        # EID-prefix: firewall instance-id 4 (DN string for named-services, no dots or colons)
         p3 = re.compile(r"^EID-prefix:\s+(?P<eid_prefix>\d{1,3}\.\d{1,3}\."
                         r"\d{1,3}\.\d{1,3}\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}"
-                        r"|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{1,3}|any-mac)"
+                        r"|([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{1,3}|any-mac|[^\s\.:,]+)"
                         r"\s+instance-id\s+(?P<instance_id>\d+)$")
 
         # First registered:     never
@@ -3216,12 +3226,13 @@ class ShowLispServerSubscriptionSuperParser(ShowLispServerSubscriptionSchema):
         #Prefix                                  Source                         Created     Last Update   Subscribers
         #2.2.2.0/24                              2.2.2.0/24                     21:01:12    never           2
         #172.168.0.0/16                          172.168.0.0/16                 20:53:14    never           1
+        #firewall                                firewall                       00:00:06    00:00:06        2
         p2 = re.compile(r"^(?P<eid_prefix>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})\s+"
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)\s+"
                         r"(?P<registration>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|Unattached|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})\s+"
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)\s+"
                         r"(?P<created>\S+)\s+(?P<last_update>\S+)\s+(?P<subscribers>\d+)$")
 
         for line in output.splitlines():
@@ -3320,9 +3331,10 @@ class ShowLispServerSubscriptionPrefixSuperParser(ShowLispServerSubscriptionPref
                         r"IID\s+(?P<instance_id>\d+),\s+(?P<entries>\d+)\s+entries$")
 
         # Eid Prefix: 172.168.0.0/16
+        # Eid Prefix: firewall
         p2 = re.compile(r"^Eid\s+Prefix:\s+(?P<eid_prefix>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})$")
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)$")
 
         # First Subscribed: 00:00:55
         p3 = re.compile(r"^First\s+Subscribed:\s+(?P<first_subscribed>\S+)$")
@@ -3331,9 +3343,10 @@ class ShowLispServerSubscriptionPrefixSuperParser(ShowLispServerSubscriptionPref
         p4 = re.compile(r"^Last\s+Subscribed:\s+(?P<last_subscribed>\S+)$")
 
         # Registration: 172.168.0.0/16
+        # Registration: firewall
         p4_1 = re.compile(r"^Registration:\s+(?P<registration>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
                         r"\/\d{1,2}|[a-fA-F\d\:]+\/\d{1,3}|Unattached|"
-                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2})$")
+                        r"([a-fA-F\d]{4}\.){2}[a-fA-F\d]{4}\/\d{2}|[^\s\.:,]+)$")
 
         # Subscriber 100.11.11.11:45646
         p5 = re.compile(r'^Subscriber\s+(?P<subscriber>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([a-fA-F\d\:]+))(:'

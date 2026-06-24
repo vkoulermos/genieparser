@@ -1,0 +1,179 @@
+show subscriber session detail
+
+example 1:
+Type: PPPoE, UID: 1, State: authen, Identity: qinq_customer
+IPv4 Address: 135.1.1.1
+Session Up-time: 00:00:03, Last Changed: 00:00:00
+Interface: Virtual-Access1.1
+Switch-ID: 4098
+
+Policy information:
+  Context 7F29E1B05A38: Handle D0000001
+  AAA_id 0000000D: Flow_handle 0
+  Authentication status: authen
+  Downloaded User profile, excluding services:
+    service-type         0   2 [Framed]
+    qos-policy-out       0   "add-class(sub,(class-default,voip),shape(64000),queue-limit(30))"
+    qos-policy-in        0   "add-class(sub,(class-default,mission-critical),police(200000,9216,1000,transmit,drop,drop))"
+    qos-policy-out       0   "add-class(sub,(class-default,mission-critical),bw-abs(64),set-ip-prec(5))"
+    qos-policy-in        0   "add-class(sub,(class-default,voip),set-ip-dscp(46))"
+    sub-qos-policy-in    0   "ISG-3"
+    sub-qos-policy-out   0   "ISG-7"
+  Downloaded User profile, including services:
+    service-type         0   2 [Framed]
+    username             0   "isg_acct1"
+    traffic-class        0   "input access-group name isg_acl1"
+    traffic-class        0   "output access-group name isg_acl1"
+    accounting-list      0   "AAA_LIST"
+    qos-policy-out       0   "add-class(sub,(class-default,voip),shape(64000),queue-limit(30))"
+    qos-policy-in        0   "add-class(sub,(class-default,mission-critical),police(200000,9216,1000,transmit,drop,drop))"
+    qos-policy-out       0   "add-class(sub,(class-default,mission-critical),bw-abs(64),set-ip-prec(5))"
+    qos-policy-in        0   "add-class(sub,(class-default,voip),set-ip-dscp(46))"
+    sub-qos-policy-in    0   "ISG-3"
+    sub-qos-policy-out   0   "ISG-7"
+  Config history for session (recent to oldest):
+    Access-type: PPP Client: Push Command-Handler
+     Policy event: Process Config
+      Profile name: qinq_customer, 2 references
+        qos-policy-out       0   "add-class(sub,(class-default,voip),shape(64000),queue-limit(30))"
+        qos-policy-in        0   "add-class(sub,(class-default,mission-critical),police(200000,9216,1000,transmit,drop,drop))"
+        qos-policy-out       0   "add-class(sub,(class-default,mission-critical),bw-abs(64),set-ip-prec(5))"
+        qos-policy-in        0   "add-class(sub,(class-default,voip),set-ip-dscp(46))"
+        sub-qos-policy-in    0   "ISG-3"
+        sub-qos-policy-out   0   "ISG-7"
+    Access-type: Web-service-logon Client: SM
+     Policy event: Apply Config Success (Service)
+      Profile name: isg_acct1, 3 references
+        password             0   <hidden>
+        username             0   "isg_acct1"
+        traffic-class        0   "input access-group name isg_acl1"
+        traffic-class        0   "output access-group name isg_acl1"
+        accounting-list      0   "AAA_LIST"
+    Access-type: PPP Client: SM
+     Policy event: Process Config Connecting
+      Profile name: apply-config-only, 2 references
+        service-type         0   2 [Framed]
+  Active services associated with session:
+    name "isg_acct1"
+  Rules, actions and conditions executed:
+    subscriber rule-map default-internal-rule
+      condition always event service-start
+        1 service-policy type service identifier service-name
+
+Classifiers:
+Class-id    Dir   Packets    Bytes                  Pri.  Definition
+0           In    0          0                      0    Match Any
+1           Out   0          0                      0    Match Any
+2           In    0          0                      0    Match ACL isg_acl1
+3           Out   0          0                      0    Match ACL isg_acl1
+
+Features:
+
+QoS Policy Map:
+Class-id    Dir   Policy Name Source
+0           In    ISG-3       Peruser
+1           Out   ISG-7       Peruser
+
+Accounting:
+Class-id   Dir  Packets    Bytes                 Source
+2          In   0          0                     isg_acct1
+3          Out  0          0                     isg_acct1
+
+Configuration Sources:
+Type  Active Time  AAA Service ID  Name
+SVC   00:00:00     1090519041      isg_acct1
+USR   00:00:03     -               Peruser
+INT   00:00:03     -               Virtual-Template1
+
+example 2:
+%No active Subscriber Sessions
+
+example 3:
+Current Subscriber Information: Total sessions 1
+--------------------------------------------------
+Type: IPv4, UID: 1, State: authen, Identity: rouble-pppoe
+IPv4 Address: 10.0.0.2
+Session Up-time: 00:01:07, Last Changed: 00:00:04
+Switch-ID: 4097
+
+Policy information:
+  Context 708A36BF32F8: Handle 34000001
+  AAA_id 0000000D: Flow_handle 0
+  Authentication status: authen
+  Downloaded User profile, excluding services:
+    Framed-Protocol      0   1 [PPP]
+    service-type         0   2 [Framed]
+    Event-Timestamp      0   1705974090 (0x65AF194A)
+    interface            0   "77"
+    addr                 0   10.0.0.2
+    username             0   "rouble-pppoe"
+    ssg-account-info     0   "Vuser-cookie"
+  Downloaded User profile, including services:
+    Framed-Protocol      0   1 [PPP]
+    service-type         0   2 [Framed]
+    Event-Timestamp      0   1705974090 (0x65AF194A)
+    interface            0   "77"
+    addr                 0   10.0.0.2
+    username             0   "rouble-pppoe"
+    ssg-account-info     0   "Vuser-cookie"
+    traffic-class        0   "input access-group 102"
+  Config history for session (recent to oldest):
+    Access-type: Web-service-logon Client: SM
+     Policy event: Apply Config Success (Service)
+      Profile name: transparent-service, 3 references
+        traffic-class        0   "input access-group 102"
+    Access-type: IP Client: SM
+     Policy event: Service Selection Request
+      Profile name: 10.0.0.2, 2 references
+        Framed-Protocol      0   1 [PPP]
+        service-type         0   2 [Framed]
+        Event-Timestamp      0   1705974090 (0x65AF194A)
+        interface            0   "77"
+        addr                 0   10.0.0.2
+        username             0   "rouble-pppoe"
+        ssg-account-info     0   "Vuser-cookie"
+  Active services associated with session:
+    name "transparent-service"
+  Rules, actions and conditions executed:
+        subscriber condition-map match-all CONDA
+          match identifier source-ip-address 10.0.0.2 255.255.255.255 [TRUE]
+    subscriber rule-map START_RULE
+      condition CONDA event session-start
+        1 authorize aaa list author_list identifier source-ip-address
+    subscriber rule-map default-internal-rule
+      condition always event service-start
+        1 service-policy type service identifier service-name
+
+Classifiers:
+Class-id    Dir   Packets    Bytes                  Pri.  Definition
+0           In    6          684                    0    Match Any
+1           Out   5          570                    0    Match Any
+2           In    0          0                      0    Match ACL 102
+
+Template Id : 3
+
+Features:
+
+Static Routes:
+Class-id  Configuration Status           Source
+0          This feature is enabled       Peruser
+
+Prepaid Time Monitor:
+Class-id   Dir  Threshold  Quota    Session Time Source
+2          In   30         50       34           transparent-service
+
+Prepaid Volume Monitor:
+Class-id   Dir  Packets    Bytes                  Source
+2          In   0          0                      transparent-service
+
+  Usage(since last update): 0 - Total: 0
+  Threshold:60 - Quota:60
+  Current states: Start
+
+Configuration Sources:
+Type  Active Time  AAA Service ID  Name
+SVC   00:00:39     3103784961      transparent-service
+USR   00:01:07     -               Peruser
+INT   00:01:07     -               FastEthernet0/3/0
+
+

@@ -1,0 +1,14 @@
+show app-hosting infra
+IOX version: 2.13.0
+App signature verification: enabled
+CAF Health: Stable
+Internal working directory: /vol/disk0/iox
+
+
+CPU:
+  Quota: 80(Percentage)
+  Available: 80(Percentage)
+  Quota: 25120(Units)
+  Available: 25120(Units)
+
+epcot-1#

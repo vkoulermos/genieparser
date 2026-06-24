@@ -16104,11 +16104,16 @@ class ShowPlatformsoftwarefedswitchactivesecurityfedpmifidSchema(MetaParser):
 class ShowPlatformsoftwarefedswitchactivesecurityfedpmifid(ShowPlatformsoftwarefedswitchactivesecurityfedpmifidSchema):
     """Parser for 'show platform software fed switch {switch_type} security-fed pm if-id {port_if_id} '"""
 
-    cli_command = "show platform software fed switch {switch_type} security-fed pm if-id {port_if_id}"
+    cli_command = ["show platform software fed {switch} {switch_type} security-fed pm if-id {port_if_id}",
+                     "show platform software fed {switch_type} security-fed pm if-id {port_if_id}"]
 
-    def cli(self, switch_type,port_if_id,output=None):
+    def cli(self, switch_type,port_if_id,switch='', output=None):
         if output is None:
-            output = self.device.execute(self.cli_command.format(switch_type=switch_type, port_if_id=port_if_id))
+            if switch:
+                cmd = self.cli_command[0].format(switch=switch, switch_type=switch_type, port_if_id=port_if_id)
+            else:
+                cmd = self.cli_command[1].format(switch_type=switch_type, port_if_id=port_if_id)
+            output = self.device.execute(cmd)
 
         # Initialize the dictionary
         ret_dict = {}
@@ -16129,7 +16134,8 @@ class ShowPlatformsoftwarefedswitchactivesecurityfedpmifid(ShowPlatformsoftwaref
         p5 = re.compile(r'Secure Feature Flags\s*=\s*(?P<flags>\S+)')
 
         # Secure Feature Desc  = dot1x
-        p6 = re.compile(r'Secure Feature Desc\s*=\s*(?P<description>\S+)')
+        # Secure Feature Desc  = dot1x sec
+        p6 = re.compile(r'^Secure Feature Desc\s*=\s*(?P<description>[\w\s\-]+)$')
 
         # PSec Inactivity Time = 0
         p7 = re.compile(r'PSec Inactivity Time\s*=\s*(?P<time>\d+)')
@@ -18658,6 +18664,11 @@ class ShowPlatformSoftwareFedSwitchWdavcFlowsSchema(MetaParser):
     Schema for show platform software fed switch {switch_num} wdavc flows
     """
     schema = {
+        Optional("curr_flows"): int,
+        Optional("watermark"): int,
+        Optional("max_flows"): int,
+        Optional("num_buckets"): int,
+        Optional("num_entries_bucket"): int,
         "index": {
             Any(): {
                 "ip1": str,
@@ -18704,6 +18715,12 @@ class ShowPlatformSoftwareFedSwitchWdavcFlows(ShowPlatformSoftwareFedSwitchWdavc
         
         p1 = re.compile(r'^(?P<ix>\d+)\s+\|(?P<ip1>[^\|]+)\|(?P<ip2>[^\|]+)\|(?P<port1>[^\|]+)\|(?P<port2>[^\|]+)\|(?P<l3_proto>[^\|]+)\|(?P<l4_proto>[^\|]+)\|(?P<vrf_vlan>[^\|]+)\|(?P<timeout_sec>\d+)\s+HW\|(?P<app_name>[^\|]+)\|(?P<tuple_type>[^\|]+)\|(?P<flow_type>[^\|]+)\|(?P<swapped>[^\|]+)\|(?P<clients>[^\|]+)\|(?P<allow_bp>[^\|]+)\|(?P<final>[^\|]+)\|(?P<pkts>[^\|]+)\|(?P<bypass_pkt>[^\|]+)\|$')
 
+        # CurrFlows=5000, Watermark=5000
+        p2 = re.compile(r'^CurrFlows=(?P<curr_flows>\d+),\s+Watermark=(?P<watermark>\d+)$')
+
+        # CurrFlows : 5000    MaxFlows : 65536    NumBuckets : 1024    NumEntries/Bucket : 64
+        p3 = re.compile(r'^CurrFlows\s+:\s+(?P<curr_flows>\d+)\s+MaxFlows\s+:\s+(?P<max_flows>\d+)\s+NumBuckets\s+:\s+(?P<num_buckets>\d+)\s+NumEntries/Bucket\s+:\s+(?P<num_entries_bucket>\d+)$')
+
         for line in output.splitlines():
             line = line.strip()
             
@@ -18735,7 +18752,26 @@ class ShowPlatformSoftwareFedSwitchWdavcFlows(ShowPlatformSoftwareFedSwitchWdavc
                 index_dict["final"] = group["final"].strip().lower() == "true"
                 index_dict["pkts"] = int(group["pkts"])
                 index_dict["bypass_pkt"] = int(group["bypass_pkt"])
+                continue
 
+            # CurrFlows=5000, Watermark=5000
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                ret_dict["curr_flows"] = int(group["curr_flows"])
+                ret_dict["watermark"] = int(group["watermark"])
+                continue
+
+            # CurrFlows : 5000    MaxFlows : 65536    NumBuckets : 1024    NumEntries/Bucket : 64
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                ret_dict["curr_flows"] = int(group["curr_flows"])
+                ret_dict["max_flows"] = int(group["max_flows"])
+                ret_dict["num_buckets"] = int(group["num_buckets"])
+                ret_dict["num_entries_bucket"] = int(group["num_entries_bucket"])
+                continue
+            
         return ret_dict
 
 class ShowPlatformSoftwareFedSwitchWdavcFunctionFlowsSchema(MetaParser):

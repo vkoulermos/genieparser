@@ -1,0 +1,57 @@
+show idmgr session key aaa 00000013
+
+example1:
+session-handle = 5300000C
+aaa-unique-id = 00000013
+authen-status = authen
+interface = nas-port:0.0.0.0:0/1/5/10.100
+username = p3p4user4
+addr = 11.11.11.1
+session-guid = 091BE92C00000013
+The session hdl 5300000C in the record is valid
+
+			Service 1 information:
+session-handle = 5300000C
+service-name = nonTC1
+idmgr-svc-key = 5300000CA7000003
+authen-status = authen
+
+			Service 2 information:
+session-handle = 5300000C
+service-name = idle1
+idmgr-svc-key = 5300000C87000002
+authen-status = authen
+
+			Service 3 information:
+session-handle = 5300000C
+service-name = l4rdt1
+idmgr-svc-key = 5300000C96000001
+authen-status = authen
+
+example 2:
+session-handle = 3800000C
+aaa-unique-id = 00000012
+authen-status = authen
+interface = nas-port:0.0.0.0:0/1/5/10.100
+username = p4q2
+addr = 66.66.66.1
+session-guid = 091BE92C00000012
+The session hdl 3800000C in the record is valid
+
+			Service 1 information:
+session-handle = 3800000C
+service-name = l4rdt1
+idmgr-svc-key = 3800000CFA000006
+authen-status = authen
+
+			Service 2 information:
+session-handle = 3800000C
+service-name = abs1
+idmgr-svc-key = 3800000CD8000004
+authen-status = authen
+
+			Service 3 information:
+session-handle = 3800000C
+service-name = qos:vc-qos-policy-out=ipone-mqc-out
+idmgr-svc-key = 3800000CC8000005
+authen-status = authen

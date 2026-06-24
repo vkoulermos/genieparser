@@ -1,0 +1,20 @@
+Uplink Autoconfig: Enable
+Configured IPv4 Uplink interface: Vlan 1 (Default)
+Uplink IPv4 interface: Vlan 92
+        IP Address: 192.0.2.181/255.255.255.0
+        Type:       DHCP
+        SVI:        Configured
+        Port Used:  GigabitEthernet1/0/2
+        GW IP:      192.0.2.1
+        GW MAC:     aa00.bbcc.ddee
+        Score:      3
+Configured IPv6 Uplink interface: Vlan 1 (Default)
+Uplink IPv6 interface: Vlan 92
+        IP Address: 2001:db8:92::1/64 
+        Type:       SLAAC
+        SVI:        Configured
+        Port Used:  GigabitEthernet1/0/2
+        GW IP:      fe80::1
+        GW MAC:     aa00.bbcc.ddee
+        Score:      0
+Uplink Reachable: IPv4

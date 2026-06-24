@@ -27,7 +27,8 @@ expected_output={
             "state": "MAC-REACHABLE",
             "policy": "LISP-DT-GUARD-VLAN",
             "time_left": "N/A",
-            "input_index": 53
+            "input_index": 53,
+            "attached": {}
         },
         3: {
             "dev_code": "L",

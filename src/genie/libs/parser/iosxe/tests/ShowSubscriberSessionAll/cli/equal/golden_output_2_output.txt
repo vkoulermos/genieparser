@@ -1,0 +1,3 @@
+show subscriber session all
+
+%No active Subscriber Sessions

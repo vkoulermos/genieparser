@@ -1,0 +1,2 @@
+dev2#snmp get-bulk v2c 6.6.6.6 public non-repeaters 0 max-repetitions 2 oid dot1qTpFdbPort
+% Bad IP address or host name

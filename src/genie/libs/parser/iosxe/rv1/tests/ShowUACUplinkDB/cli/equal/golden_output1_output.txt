@@ -1,0 +1,21 @@
+Uplink Autoconfig: Enable
+Uplink Allow-list enforce: IPv4:No  IPv6:No
+
+IPV4 Uplink: Vlan 1
+GW ARP Pass Count:5
+IPv4 Preferred Uplink : Same as Selected Uplink
+IPV6 Uplink: None
+GW ARP Pass Count:0
+IPv6 Preferred Uplink: Vlan 1
+GW ARP Pass Count:0
+IfName     Score State     IPAddress        Subnet/Prefix    Gateway          GWProbe  GWProbeFail Allowed
+Vlan1      8     SELECTED  192.0.2.10       255.255.0.0      192.0.2.1        Success  0           1
+Vlan110    4     SCOREDONE 198.51.100.110   255.255.0.0      198.51.100.1     Success  0           1
+Vlan120    4     SCOREDONE 203.0.113.120    255.255.0.0      203.0.113.1      Success  0           1
+Vlan130    4     SCOREDONE 192.0.2.130      255.255.0.0      192.0.2.1        Success  0           1
+Gi0/0      5     GWARPTEST 198.51.100.200   255.255.255.240  0.0.0.0          Fail     2           1
+IfName     Score State     IPv6Address                    Prefix  Gateway                  GWProbe GWProbeFail Allowed
+Vlan110    4     SCOREDONE 2001:db8:110::1                64      fe80:110::1              Success 0           1
+Vlan120    4     SCOREDONE 2001:db8:120::1                64      fe80:120::1              Success 0           1
+Vlan130    4     SCOREDONE 2001:db8:130::1                64      fe80:130::1              Success 0           1
+Gi0/0      0     GWARPTEST 2001:db8:8080::1               64      UNKNOWN                  Fail    1           1

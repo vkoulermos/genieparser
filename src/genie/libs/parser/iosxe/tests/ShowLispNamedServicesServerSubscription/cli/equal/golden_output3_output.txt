@@ -1,0 +1,4 @@
+iolmsmr11#show lisp locator-table default instance-id 4 named-services server subscription     
+LISP MS EID Subscriptions for LISP 0 IID 4, 1 entries
+Prefix                                  Registration                            Created     Last Update Subscribers
+firewall                                firewall                                00:36:47    00:36:47    1  
