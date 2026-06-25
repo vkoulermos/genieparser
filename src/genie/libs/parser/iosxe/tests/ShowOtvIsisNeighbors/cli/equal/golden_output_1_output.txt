@@ -1,0 +1,5 @@
+Router# show otv isis neighbors
+
+Tag Overlay1:
+System Id   Type Interface  IP Address                          State   Holdtime   Circuit Id
+u1          L1   Ov1        209.165.201.22                      UP      22         u3.01

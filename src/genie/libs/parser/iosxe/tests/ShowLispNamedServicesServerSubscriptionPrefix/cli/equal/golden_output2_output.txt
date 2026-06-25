@@ -1,0 +1,11 @@
+iolmsmr11#show lisp instance-id 4 named-services server subscription detail
+LISP MS EID Subscriptions for LISP 0 IID 4, 1 entries
+
+Eid Prefix: firewall
+  First Subscribed: 00:40:28
+  Last Subscribed: 00:40:28
+  Registration: firewall
+
+ Subscriber 100.22.22.22:11323
+   xTR-ID 0x610A78BA-0x7793BD60-0x9AFA7D91-0x3BC2F250
+   Subscriber Index: 3

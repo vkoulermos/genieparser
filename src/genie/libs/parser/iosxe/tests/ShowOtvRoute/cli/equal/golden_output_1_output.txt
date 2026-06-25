@@ -1,0 +1,37 @@
+Router# show otv route
+
+Codes: BD - Bridge-Domain, AD - Admin-Distance, SI - Service Instance
+OTV Unicast MAC Routing Table for Overlay1
+Inst VLAN BD     MAC Address    AD    Owner  Next Hops(s)
+----------------------------------------------------------
+0    67   67     0007.0007.0009 20    OTV    232.1.2.3
+0    67   67     0102.0304.0506 40    BD Eng Gi0/0/1:SI67
+0    99   99     0009.0009.0009 20    OTV    232.1.2.3
+0    99   99     0038.0000.0000 1     OTV    Ov3, 10.33.1.0
+0    99   99     0039.0000.0000 1     OTV    Ov3, 10.34.5.2
+0    99   99     003a.0000.0000 1     OTV    Ov3, 10.35.4.6
+0    99   99     003b.0000.0000 1     OTV    Ov3, 10.36.3.0
+0    99   99     0102.0304.0507 40    BD Eng Et0/1:SI99
+
+8 unicast routes displayed in Overlay1
+
+OTV Unicast MAC Routing Table for Overlay2
+Inst VLAN BD     MAC Address    AD    Owner  Next Hops(s)
+----------------------------------------------------------
+0    57   57     0005.0007.0009 20    OTV    Flood
+0    57   57     0102.0304.0506 40    BD Eng Gi0/0/0:SI57
+0    57   57     0102.0304.0508 40    BD Eng Gi0/0/0:SI57
+0    57   57     0102.0304.0509 40    BD Eng Gi0/0/0:SI57
+0    59   59     0005.0009.0009 20    OTV    Flood
+0    59   59     0102.0304.0507 40    BD Eng Gi0/0/0:SI59
+
+6 unicast routes displayed in Overlay2
+
+OTV Unicast MAC Routing Table for Overlay3
+Inst VLAN BD     MAC Address    AD    Owner  Next Hops(s)
+----------------------------------------------------------
+
+0 unicast routes displayed in Overlay3
+
+----------------------------------------------------------
+14 Total Unicast Routes Displayed

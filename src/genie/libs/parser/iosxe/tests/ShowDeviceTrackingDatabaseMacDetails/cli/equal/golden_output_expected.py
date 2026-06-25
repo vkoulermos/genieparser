@@ -27,6 +27,7 @@ expected_output = {
                 "state": "MAC-DOWN",
                 "policy": "default",
                 "input_index": 60,
+                "attached": {},
             },
             3: {
                 "dev_code": "L2F",
@@ -38,6 +39,7 @@ expected_output = {
                 "time_left": "231 s",
                 "policy": "LISP-DT-GLEAN-VLAN-MULTI-IP",
                 "input_index": 31,
+                "attached": {},
             },      
             4: {
                 "dev_code": "L",
@@ -49,6 +51,7 @@ expected_output = {
                 "time_left": "N/A",
                 "policy": "LISP-DT-GLEAN-VLAN-MULTI-IP",
                 "input_index": 60,
+                "attached": {},
             }              
         }
 }

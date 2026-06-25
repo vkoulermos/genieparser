@@ -322,3 +322,337 @@ class ShowCloudMgmtConnect(ShowCloudMgmtConnectSchema):
                 continue
 
         return ret_dict
+
+
+class ShowCloudMgmtConfigUpdaterSchema(MetaParser):
+    """Schema for:
+        * 'show cloud-mgmt config updater'
+    """
+    schema = {
+        Optional('err_msg'): str,
+        Optional('config_updater'): {
+            'current_state': str,
+            Optional('last_save_time'): str,
+            Optional('next_save_scheduled'): bool,
+            Optional('next_save_time'): str
+        },
+        Optional('latest_operation'): {
+            'operation': str,
+            Optional('download_running_config'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str,
+                Optional('config_location'): str,
+                Optional('dashboard_status_code'): str,
+                Optional('retry_timeout'): int,
+                Optional('dashboard_provided'): bool,
+                Optional('retry_attempt'): int,
+                Optional('retry_count'): int,
+                Optional('retry_time'): str
+            },
+            Optional('apply_running_config'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str
+            },
+            Optional('save_config'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str
+            },
+            Optional('get_running_config'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str,
+                Optional('config_location'): str,
+            },
+            Optional('get_presigned_url'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str,
+                Optional('dashboard_status_code'): str,
+                Optional('retry_timeout'): int,
+                Optional('dashboard_provided'): bool,
+                Optional('retry_attempt'): int,
+                Optional('retry_count'): int,
+                Optional('retry_time'): str
+            },
+            Optional('upload_config'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str,
+                Optional('dashboard_status_code'): str,
+                Optional('retry_timeout'): int,
+                Optional('dashboard_provided'): bool,
+                Optional('retry_attempt'): int,
+                Optional('retry_count'): int,
+                Optional('retry_time'): str
+            },
+            Optional('check_uplink'): {
+                'status': str,
+                Optional('start_time'): str,
+                Optional('result_time'): str
+            }
+        }
+    }
+
+
+class ShowCloudMgmtConfigUpdater(ShowCloudMgmtConfigUpdaterSchema):
+    """Schema for:
+        * 'show cloud-mgmt config updater'
+    """
+    cli_command = "show cloud-mgmt config updater"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else: 
+            out = output
+
+        parsed_dict = {}
+        # service meraki connect is disabled
+        p0 = re.compile(r"^(service meraki connect is disabled)$")
+
+        # Config Updater
+        p1 = re.compile(r"^Config Updater\s*$")
+
+        #   Current state:                Ready
+        p2 = re.compile(r"^Current state:\s+([A-Za-z].*)$")
+
+        # Last config save time(UTC): 2025-03-18 22:19:16
+        p3 = re.compile(r"^Last config save time\(UTC\):\s+(.*)$")
+
+        # Next config save is scheduled.
+        p4_1 = re.compile(r"^Next config save is scheduled.\s*$")
+
+        # No config save scheduled.
+        p4_2 = re.compile(r"^No config save scheduled.\s*$")
+
+        # Next config save time(UTC): 2025-03-18 22:51:20
+        p5 = re.compile(r"^Next config save time\(UTC\):\s+(.*)$")
+
+        # Latest operation
+        p6 = re.compile(r"^Latest operation\s*$")
+
+        #  Download running config: Pass
+        p7 = re.compile(r"^Download running config:\s+([A-Za-z].*)$")
+
+        #  Apply running config: Pass
+        p8 = re.compile(r"^Apply running config:\s+([A-Za-z].*)$")
+
+        #  Save config: Completed
+        p9 = re.compile(r"^Save config:\s+([A-Za-z].*)$")
+
+        #  Get running config: Pass
+        p10 = re.compile(r"^Get running config:\s+([A-Za-z].*)$")
+
+        #  Get presigned url: Pass
+        p11 = re.compile(r"^Get presigned url:\s+([A-Za-z].*)$")
+
+        #  Upload config: Pass
+        p12 = re.compile(r"^Upload config:\s+([A-Za-z].*)$")
+
+        #  Check uplink: Pass
+        p13 = re.compile(r"^Check uplink:\s+([A-Za-z].*)$")
+
+        #    start time(UTC): 2025-03-18 22:15:40
+        p14 = re.compile(r"^start time\(UTC\):\s+(.*)$")
+
+        #    result time(UTC): 2025-03-18 22:15:51
+        p15 = re.compile(r"^result time\(UTC\):\s+(.*)$")
+
+        #    Downloaded config location: /flash/meraki/config_updater/monitor/dwnld_running.config
+        p16 = re.compile(r"^[A-Z][a-zA-Z]*\sconfig location:\s*(.*)$")
+
+        #    dashboard status code: 204
+        p17 = re.compile(r"^dashboard status code:\s+(\d*)$")
+
+        #    retry timeout: 300 sec
+        p18 = re.compile(r"^retry timeout:\s+(\d*)\s*sec$")
+
+        #    dashboard provided: No
+        p19 = re.compile(r"^dashboard provided:\s+(.*)$")
+
+        #    retry count: 2/3
+        p20 = re.compile(r"^retry count:\s+(\d*)/(\d*)$")
+
+        #      retry time(UTC): 2025-03-25 18:42:25
+        p21 = re.compile(r"^retry time\(UTC\):\s+(.*)$")
+
+        current_section = None
+        current_subsection = None
+
+        
+        # Keep track of whether we are looking for the latest operation
+        # Read the latest operation two lines after we see "Latest Operation", when var is set to two
+        latest_operation = 0
+        current_dict = {}
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            if latest_operation:
+                if latest_operation == 2:
+                    latest_operation_dict['operation'] = line
+                    latest_operation = 0
+                else:
+                    latest_operation += 1
+                continue
+
+            # service meraki connect is disabled
+            m = p0.match(line)
+            if m:
+                parsed_dict['err_msg'] = m.group(1)
+                return parsed_dict
+
+            # Config Updater
+            m = p1.match(line)
+            if m:
+                config_updater_dict = parsed_dict.setdefault("config_updater", {})
+                continue
+
+            #   Current state:                Ready
+            m = p2.match(line)
+            if m:
+                config_updater_dict['current_state'] = m.group(1)
+                continue
+
+            # Last config save time(UTC): 2025-03-18 22:19:16
+            m = p3.match(line)
+            if m:
+                config_updater_dict['last_save_time'] = m.group(1)
+                continue
+
+            # Next config save is scheduled.
+            m = p4_1.match(line)
+            if m:
+                config_updater_dict['next_save_scheduled'] = True
+                continue
+
+            # No config save scheduled.
+            m = p4_2.match(line)
+            if m:
+                config_updater_dict['next_save_scheduled'] = False
+                continue
+
+            # Next config save time(UTC): 2025-03-18 22:51:20
+            m = p5.match(line)
+            if m:
+                config_updater_dict['next_save_time'] = m.group(1)
+                continue
+
+            # Latest operation
+            m = p6.match(line)
+            if m:
+                latest_operation_dict = parsed_dict.setdefault("latest_operation", {})
+                latest_operation = 1
+                continue
+
+            #  Download running config: Pass
+            m = p7.match(line)
+            if m:
+                download_dict = latest_operation_dict.setdefault("download_running_config", {})
+                download_dict['status'] = m.group(1)
+                current_dict = download_dict
+                continue
+
+            #  Apply running config: Pass
+            m = p8.match(line)
+            if m:
+                apply_dict = latest_operation_dict.setdefault("apply_running_config", {})
+                apply_dict['status'] = m.group(1)
+                current_dict = apply_dict
+                continue
+
+            #  Save config: Completed
+            m = p9.match(line)
+            if m:
+                save_dict = latest_operation_dict.setdefault("save_config", {})
+                save_dict['status'] = m.group(1)
+                current_dict = save_dict
+                continue
+
+            #  Get running config: Pass
+            m = p10.match(line)
+            if m:
+                get_dict = latest_operation_dict.setdefault("get_running_config", {})
+                get_dict['status'] = m.group(1)
+                current_dict = get_dict
+                continue
+
+            #  Get presigned url: Pass
+            m = p11.match(line)
+            if m:
+                get_presigned_dict = latest_operation_dict.setdefault("get_presigned_url", {})
+                get_presigned_dict['status'] = m.group(1)
+                current_dict = get_presigned_dict
+                continue
+
+            #  Upload config: Pass
+            m = p12.match(line)
+            if m:
+                upload_dict = latest_operation_dict.setdefault("upload_config", {})
+                upload_dict['status'] = m.group(1)
+                current_dict = upload_dict
+                continue
+
+            #  Check uplink: Pass
+            m = p13.match(line)
+            if m:
+                uplink_dict = latest_operation_dict.setdefault("check_uplink", {})
+                uplink_dict['status'] = m.group(1)
+                current_dict = uplink_dict
+                continue
+
+            #  start time(UTC): 2025-03-18 22:15:40
+            m = p14.match(line)
+            if m:
+                current_dict['start_time'] = m.group(1)
+                continue
+
+            #  result time(UTC): 2025-03-18 22:15:51
+            m = p15.match(line)
+            if m:
+                current_dict['result_time'] = m.group(1)
+                continue
+
+            #  Downloaded config location: /flash/meraki/config_updater/monitor/dwnld_running.config
+            m = p16.match(line)
+            if m:
+                current_dict['config_location'] = m.group(1)
+                continue
+
+            #  dashboard status code: 204
+            m = p17.match(line)
+            if m:
+                current_dict['dashboard_status_code'] = m.group(1)
+                continue
+
+            #  retry timeout: 300 sec
+            m = p18.match(line)
+            if m:
+                current_dict['retry_timeout'] = int(m.group(1))
+                continue
+
+            #  dashboard provided: No
+            m = p19.match(line)
+            if m:
+                current_dict['dashboard_provided'] = m.group(1) != 'No'
+                continue
+
+            #  retry count: 2/3
+            m = p20.match(line)
+            if m:
+                current_dict['retry_attempt'] = int(m.group(1))
+                current_dict['retry_count'] = int(m.group(2))
+                continue
+
+            #  retry time(UTC): 2025-03-25 18:42:25
+            m = p21.match(line)
+            if m:
+                current_dict['retry_time'] = m.group(1)
+                continue
+
+        return parsed_dict

@@ -1,0 +1,9 @@
+pxtr11#sh lisp in 4 named-services publication        
+Publication Information for LISP 0 EID-table N/A (IID 4)
+Entries total 4
+EID Prefix                Last        Last            Encap-IID
+                          Published   Publisher       
+default-forwarder         00:10:12    100.55.55.55    -
+dual-stack                00:10:12    100.55.55.55    -
+firewall                  00:10:12    100.55.55.55    -
+internet                  00:10:12    100.55.55.55    -

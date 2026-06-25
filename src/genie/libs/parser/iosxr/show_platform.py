@@ -1073,7 +1073,7 @@ class AdminShowDiagChassisSchema(MetaParser):
         Optional('sn'): str,
         Optional('pcb_serial_number'): str,
         'pid': str,
-        'vid': str,
+        Optional('vid'): str,
         Optional('desc'): str,
         Optional('clei'): str,
         Optional('eci'): str,

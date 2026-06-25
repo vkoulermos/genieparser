@@ -1,0 +1,10 @@
+show platform software ess fp active l4r
+Subscriber L4redirect records: Total  : 2
+
+Segment                                  ClassIn     ClassOut    EVSI
+SrvIP                                    SrvPort     QFP Hdl     AOM State
+-------------------------------------------------------------------------------
+0x004200fc00000018                       32          33          4325629
+3001::1                                  80          37          created
+0x004200fc00000018                       34          35          4325630
+33.33.33.1                               80          36          created

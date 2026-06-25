@@ -1,0 +1,6 @@
+Publication Information for LISP 0 EID-table N/A (IID 4)
+Entries total 2
+EID Prefix                Last        Last            Encap-IID
+                          Published   Publisher       
+dual-stack                2d07h       100.55.55.55    -
+firewall                  2d07h       100.55.55.55    -

@@ -1,0 +1,19 @@
+show bgp all detail
+BGP routing table entry for 10.84.1.1/32, version 10
+  Paths: (2 available, best #2, table default)
+Multipath: eBGP
+  Flag: 0x100
+  Advertised to update-groups:
+     1
+  Refresh Epoch 1
+  64512.64201 64512.64201 64512
+    2001:3:5:1::5 (FE80:3:5:1::5) from 2001:3:5:1::5 (5.5.5.5)
+      Origin incomplete, localpref 100, valid, external
+      rx pathid: 0, tx pathid: 0
+      Updated on May 13 2026 00:12:45 EST
+  Refresh Epoch 2
+  64512
+    2001:2:3:1::2 (FE80:2:3:1::2) from 2001:2:3:1::2 (2.2.2.2)
+      Origin incomplete, metric 0, localpref 100, valid, external, best
+      rx pathid: 0, tx pathid: 0x0
+      Updated on May 13 2026 00:12:45 EST

@@ -1,0 +1,6 @@
+show mac address-table count vlan 100
+Mac Entries for Vlan 100:
+---------------------------
+Dynamic Address Count  : 0
+Static  Address Count  : 0
+Total Mac Addresses    : 0

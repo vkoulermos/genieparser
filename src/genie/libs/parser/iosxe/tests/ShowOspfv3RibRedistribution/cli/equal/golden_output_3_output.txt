@@ -1,0 +1,30 @@
+show ospfv3 vrf * rib redistribution
+
+          OSPFv3 100 address-family ipv6 (router-id 2.2.2.2)
+
+2001:DB8:112::/64, type 2, metric 20, tag 0, from connected (vrf VRF1) (connected)
+  via Ethernet0/1
+2001:DB8:400::1/128, type 2, metric 20, tag 0, from connected (vrf VRF1) (connected)
+  via Loopback40
+2001:DB8:600::/64, type 2, metric 20, tag 0, from static (vrf VRF1)
+  via Null0
+2001:DB8:1100::1/128, type 2, metric 1, tag 65001, from bgp 65002 (vrf VRF1)
+  via FE80::A8BB:CCFF:FE00:9B10, Ethernet0/1
+2001:DB8:1200::1/128, type 2, metric 20, tag 0, from eigrp 10 (vrf VRF1)
+  via FE80::A8BB:CCFF:FE00:9B10, Ethernet0/1
+
+          OSPFv3 100 address-family ipv6 vrf VRF1 (router-id 2.2.2.2)
+
+2001:DB8:12::/64, type 2, metric 20, tag 0, from connected (connected)
+  via Ethernet0/0
+2001:DB8:23::/64, type 2, metric 20, tag 0, from connected (connected)
+  via Ethernet0/2
+2001:DB8:100::1/128, type 2, metric 1, tag 65001, from bgp 65002
+  via FE80::A8BB:CCFF:FE00:9B00, Ethernet0/0
+2001:DB8:200::1/128, type 2, metric 20, tag 0, from eigrp 10
+  via FE80::A8BB:CCFF:FE00:9B00, Ethernet0/0
+2001:DB8:300::1/128, type 2, metric 20, tag 0, from connected (connected)
+  via Loopback30
+2001:DB8:500::/64, type 2, metric 20, tag 0, from static
+  via Null0
+Router#

@@ -1,0 +1,8 @@
+xtr12#sh lisp in 4 named-services subscription firewall
+LISP EID Subscriptions for LISP 0 EID-table N/A (IID 4), 1 entries
+
+firewall, Uptime: 11:55:40, Last-change: 11:55:40 
+Source: remote-eid
+Map-server                              State                         
+100.55.55.55                            Subs-Acked                    
+100.44.44.44                            Subs-Acked  

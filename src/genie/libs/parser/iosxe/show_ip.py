@@ -12275,3 +12275,64 @@ class ShowIpv6RouteVrfSummaryInternal(ShowIpv6RouteVrfSummaryInternalSchema):
                     continue
         
         return ret_dict
+
+
+class ShowIpPortbundleStatusSchema(MetaParser):
+    """Schema for show ip portbundle status | include <IP>"""
+    schema = {
+        "bundle_length": int,
+        "bundle_groups": str,
+        "ip_address": {
+            Any(): {
+                "free_bundles": int,
+                "in_use_bundles": int,
+            }
+        }
+    }
+
+
+class ShowIpPortbundleStatus(ShowIpPortbundleStatusSchema):
+    """Parser for show ip portbundle status | include <IP>"""
+    cli_command = "show ip portbundle status | include {ip}"
+
+    def cli(self, ip, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command.format(ip=ip))
+
+        ret_dict = {}
+
+        # Bundle-length = 4
+        p1 = re.compile(r'^\s*Bundle-length\s*=\s*(?P<length>\d+)\s*$')
+        # Bundle-groups: -
+        p2 = re.compile(r'^\s*Bundle-groups\s*:\s*(?P<groups>.+?)\s*$')
+        # 10.2.81.13                       4031                    1
+        p3 = re.compile(r'^\s*(?P<ip>(?:\d{1,3}\.){3}\d{1,3})\s+(?P<free>\d+)\s+(?P<inuse>\d+)\s*$')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Bundle-length = 4
+            m = p1.match(line)
+            if m:
+                ret_dict["bundle_length"] = int(m.group("length"))
+                continue
+
+            # Bundle-groups: -
+            m = p2.match(line)
+            if m:
+                ret_dict["bundle_groups"] = m.group("groups")
+                continue
+
+            # 10.2.81.13                       4031                    1
+            m = p3.match(line)
+            if m:
+                groups = m.groupdict()
+                ip_dict = ret_dict.setdefault("ip_address", {})
+                current_ip = ip_dict.setdefault(groups["ip"], {})
+                current_ip["free_bundles"] = int(groups["free"])
+                current_ip["in_use_bundles"] = int(groups["inuse"])
+                continue
+
+        return ret_dict

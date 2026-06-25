@@ -1,0 +1,20 @@
+     MAC                    Interface  bd  (prim) prlvl      state            Time left        Policy           Input_index
+L    aabb.cc81.f6ff         BD12       12  (  12) TRUSTED    MAC-REACHABLE    N/A              evpn-device-track 22      
+L    aabb.cc81.f6ff         BD22       22  (  22) TRUSTED    MAC-REACHABLE    N/A              evpn-device-track 23      
+L3F  aabb.0000.0002         Et1/0      12  (  12) NO TRUST   MAC-REACHABLE    188 s            evpn-device-track 12      
+         Attached IP: 192.168.12.2    
+         Attached IP: 2001:12::2      
+         Attached IP: FE80::A8BB:FF:FE00:2
+L3F  aabb.0000.0002         Et1/0      22  (  22) NO TRUST   MAC-REACHABLE    184 s            evpn-device-track 22      
+         Attached IP: 192.168.22.2    
+         Attached IP: 2001:22::2      
+         Attached IP: FE80::A8BB:FF:FE00:2
+L    0022.0022.0022         BD22       22  (  22) TRUSTED    MAC-REACHABLE    N/A              evpn-device-track 23      
+         Attached IP: 192.168.22.254  
+         Attached IP: FE80::222:FF:FE22:22
+         Attached IP: 2001:22::254    
+L    0012.0012.0012         BD12       12  (  12) TRUSTED    MAC-REACHABLE    N/A              evpn-device-track 22      
+         Attached IP: 192.168.12.254  
+         Attached IP: FE80::212:FF:FE12:12
+         Attached IP: 2001:12::254    
+

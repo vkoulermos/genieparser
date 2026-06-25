@@ -15,6 +15,7 @@ IOSXE parsers for the following show commands:
     * 'show policy-map type queueing interface {interface} output class {class_name}',
     * 'show policy-map type queueing interface {interface} output',
     * 'show policy-map multipoint',
+    * 'show policy-map session out',
 '''
 
 # Python
@@ -4670,6 +4671,210 @@ class ShowPolicyMapControlPlaneAll(ShowPolicyMapControlPlaneAllSchema):
                 ip_dict['dscp'] = dscp_dict
                 qos_set_dict['ip'] = ip_dict
                 current_class_dict['qos_set'] = qos_set_dict
+                continue
+
+        return ret_dict
+
+
+class ShowPolicyMapSessionOutSchema(MetaParser):
+    """Schema for show policy-map session out"""
+    schema = {
+        "sessions": {
+            Any(): {
+                "service_policy": {
+                    "direction": str,
+                    "name": str,
+                    "class_map": {
+                        Any(): {
+                            "match_type": str,
+                            Optional("match"): str,
+                            Optional("queueing"): bool,
+                            Optional("counters"): {
+                                Optional("packets"): int,
+                                Optional("bytes"): int,
+                                Optional("interval_seconds"): int,
+                                Optional("offered_rate_bps"): int,
+                                Optional("drop_rate_bps"): int,
+                                Optional("pkts_output"): int,
+                                Optional("bytes_output"): int
+                            },
+                            Optional("queue"): {
+                                Optional("limit_packets"): int,
+                                Optional("queue_depth"): int,
+                                Optional("total_drops"): int,
+                                Optional("no_buffer_drops"): int
+                            },
+                            Optional("shape"): {
+                                Optional("type"): str,
+                                Optional("cir"): int,
+                                Optional("bc"): int,
+                                Optional("be"): int,
+                                Optional("target_shape_rate_bps"): int
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+class ShowPolicyMapSessionOut(ShowPolicyMapSessionOutSchema):
+    """Parser for show policy-map session out"""
+    cli_command = "show policy-map session out"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        session_id = None
+        service_policy_dict = None
+        class_entry = None
+
+        #  SSS session identifier 16 -
+        p1 = re.compile(r'^\s*SSS\s+session\s+identifier\s+(?P<session_id>\d+)\s*-\s*$')
+
+        #   Service-policy output: ShaperDT
+        p2 = re.compile(r'^\s*Service-policy\s+(?P<direction>\w+)\s*:\s*(?P<name>\S+)$')
+
+        #     Class-map: class-default (match-any)
+        p3 = re.compile(r'^\s*Class-map\s*:\s*(?P<class_name>\S+)\s*\((?P<match_type>[\w\-]+)\)\s*$')
+
+        #       0 packets, 0 bytes
+        p4 = re.compile(r'^\s*(?P<packets>\d+)\s+packets,\s+(?P<bytes>\d+)\s+bytes$')
+
+        #       30 second offered rate 0000 bps, drop rate 0000 bps
+        p5 = re.compile(r'^\s*(?P<interval_seconds>\d+)\s+second\s+offered\s+rate\s+(?P<offered_rate_bps>\d+)\s+bps,\s+drop\s+rate\s+(?P<drop_rate_bps>\d+)\s+bps$')
+
+        #       Match: any
+        p6 = re.compile(r'^\s*Match\s*:\s*(?P<match>.*\S)$')
+
+        #       Queueing
+        p7 = re.compile(r'^\s*Queueing$')
+
+        #       queue limit 64 packets
+        p8 = re.compile(r'^\s*queue\s+limit\s+(?P<limit_packets>\d+)\s+packets$')
+
+        #       (queue depth/total drops/no-buffer drops) 0/0/0
+        p9 = re.compile(r'^\s*\(queue\s+depth/total\s+drops/no-buffer\s+drops\)\s+(?P<queue_depth>\d+)/(?P<total_drops>\d+)/(?P<no_buffer_drops>\d+)$')
+
+        #       (pkts output/bytes output) 0/0
+        p10 = re.compile(r'^\s*\(pkts\s+output/bytes\s+output\)\s+(?P<pkts_output>\d+)/(?P<bytes_output>\d+)$')
+
+        #       shape (average) cir 10000, bc 40, be 40
+        p11 = re.compile(r'^\s*shape\s*\((?P<type>\w+)\)\s+cir\s+(?P<cir>\d+),\s+bc\s+(?P<bc>\d+),\s+be\s+(?P<be>\d+)$')
+
+        #       target shape rate 10000
+        p12 = re.compile(r'^\s*target\s+shape\s+rate\s+(?P<target_shape_rate_bps>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            #  SSS session identifier 16 -
+            m = p1.match(line)
+            if m:
+                session_id = m.group("session_id")
+                session_dict = ret_dict.setdefault("sessions", {}).setdefault(session_id, {})
+                service_policy_dict = None
+                class_entry = None
+                continue
+
+            #   Service-policy output: ShaperDT
+            m = p2.match(line)
+            if m and session_id is not None:
+                group = m.groupdict()
+                service_policy_dict = session_dict.setdefault("service_policy", {})
+                service_policy_dict["direction"] = group["direction"]
+                service_policy_dict["name"] = group["name"]
+                class_entry = None
+                continue
+
+            #     Class-map: class-default (match-any)
+            m = p3.match(line)
+            if m and service_policy_dict is not None:
+                group = m.groupdict()
+                class_name = group["class_name"]
+                class_map_dict = service_policy_dict.setdefault("class_map", {})
+                class_entry = class_map_dict.setdefault(class_name, {})
+                class_entry["match_type"] = group["match_type"]
+                continue
+
+            #       0 packets, 0 bytes
+            m = p4.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["packets"] = int(group["packets"])
+                counters["bytes"] = int(group["bytes"])
+                continue
+
+            #       30 second offered rate 0000 bps, drop rate 0000 bps
+            m = p5.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["interval_seconds"] = int(group["interval_seconds"])
+                counters["offered_rate_bps"] = int(group["offered_rate_bps"])
+                counters["drop_rate_bps"] = int(group["drop_rate_bps"])
+                continue
+
+            #       Match: any
+            m = p6.match(line)
+            if m and class_entry is not None:
+                class_entry["match"] = m.group("match")
+                continue
+
+            #       Queueing
+            m = p7.match(line)
+            if m and class_entry is not None:
+                class_entry["queueing"] = True
+                continue
+
+            #       queue limit 64 packets
+            m = p8.match(line)
+            if m and class_entry is not None:
+                queue_dict = class_entry.setdefault("queue", {})
+                queue_dict["limit_packets"] = int(m.group("limit_packets"))
+                continue
+
+            #       (queue depth/total drops/no-buffer drops) 0/0/0
+            m = p9.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                queue_dict = class_entry.setdefault("queue", {})
+                queue_dict["queue_depth"] = int(group["queue_depth"])
+                queue_dict["total_drops"] = int(group["total_drops"])
+                queue_dict["no_buffer_drops"] = int(group["no_buffer_drops"])
+                continue
+
+            #       (pkts output/bytes output) 0/0
+            m = p10.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["pkts_output"] = int(group["pkts_output"])
+                counters["bytes_output"] = int(group["bytes_output"])
+                continue
+
+            #       shape (average) cir 10000, bc 40, be 40
+            m = p11.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                shape_dict = class_entry.setdefault("shape", {})
+                shape_dict["type"] = group["type"]
+                shape_dict["cir"] = int(group["cir"])
+                shape_dict["bc"] = int(group["bc"])
+                shape_dict["be"] = int(group["be"])
+                continue
+
+            #       target shape rate 10000
+            m = p12.match(line)
+            if m and class_entry is not None:
+                shape_dict = class_entry.setdefault("shape", {})
+                shape_dict["target_shape_rate_bps"] = int(m.group("target_shape_rate_bps"))
                 continue
 
         return ret_dict

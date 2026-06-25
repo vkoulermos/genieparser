@@ -1,0 +1,43 @@
+  Cache type:                               Normal (Platform cache)
+  Cache size:                               200000
+  Current entries:                               3
+  High Watermark:                                3
+
+  Flows added:                                   3
+  Flows aged:                                    0
+
+IPV4 DESTINATION ADDRESS:        107.0.0.2
+TCP FLAGS:                       0x00
+MPLS LABEL 1 TTL:                255
+MPLS LABEL 1 EXPERIMENTAL-BITS:  6
+MPLS LABEL 1 TYPE:               0
+MPLS LABEL 1:                    6001   /6*
+IPV4 PW DEST ADDRESS:            0.0.0.0
+ipv4 source address:             106.0.0.2
+interface input:                 Null
+interface output:                Gi0/0/8
+counter packets:                 7
+
+IPV4 DESTINATION ADDRESS:        107.0.0.2
+TCP FLAGS:                       0x10
+MPLS LABEL 1 TTL:                255
+MPLS LABEL 1 EXPERIMENTAL-BITS:  6
+MPLS LABEL 1 TYPE:               0
+MPLS LABEL 1:                    6001   /6*
+IPV4 PW DEST ADDRESS:            0.0.0.0
+ipv4 source address:             106.0.0.2
+interface input:                 Null
+interface output:                Gi0/0/8
+counter packets:                 2
+
+IPV4 DESTINATION ADDRESS:        0.0.0.0
+TCP FLAGS:                       0x00
+MPLS LABEL 1 TTL:                255
+MPLS LABEL 1 EXPERIMENTAL-BITS:  0
+MPLS LABEL 1 TYPE:               0
+MPLS LABEL 1:                    6001   /0*
+IPV4 PW DEST ADDRESS:            107.0.0.2
+ipv4 source address:             0.0.0.0
+interface input:                 Null
+interface output:                Gi0/0/8
+counter packets:                 14430784

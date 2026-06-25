@@ -1,0 +1,9 @@
+iolpxtr11#show lisp locator-table default instance-id 4 named-services publication     
+Publication Information for LISP 0 EID-table N/A (IID 4)
+Entries total 4
+EID Prefix                Last        Last            Encap-IID
+                          Published   Publisher       
+default-etr               00:17:32    100.44.44.44    -
+dual-stack                00:17:31    100.44.44.44    -
+firewall                  00:17:22    100.44.44.44    -
+internet                  00:17:32    100.44.44.44    -

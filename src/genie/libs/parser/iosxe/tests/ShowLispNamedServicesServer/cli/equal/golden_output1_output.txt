@@ -1,0 +1,59 @@
+msmr11#sh lisp all in * named-services server
+
+=================================================
+Output for router lisp 0 instance-id 0
+=================================================
+LISP Site Registration Information
+
+
+=================================================
+Output for router lisp 0 instance-id 4
+=================================================
+LISP Site Registration Information
+* = Some locators are down or unreachable
+# = Some registrations are sourced by reliable transport
+
+Site Name      Last      Up     Who Last              Inst     EID Prefix
+               Register         Registered            ID       
+site1          00:01:07  yes#   100.22.22.22:20055    4        default-forwarder
+               00:01:02  yes#   100.11.11.11:34584    4        dual-stack
+               00:01:02  yes#   100.11.11.11:34584    4        firewall
+               00:01:07  yes#   100.22.22.22:20055    4        internet
+               never     no     --                    4        named-services
+
+=================================================
+Output for router lisp 0 instance-id 5
+=================================================
+LISP Site Registration Information
+
+
+=================================================
+Output for router lisp 0 instance-id 4100
+=================================================
+LISP Site Registration Information
+
+
+=================================================
+Output for router lisp 0 instance-id 4101
+=================================================
+LISP Site Registration Information
+
+
+=================================================
+Output for router lisp 0 instance-id 5000
+=================================================
+LISP Site Registration Information
+
+
+=================================================
+Output for router lisp 0 instance-id 16777214
+=================================================
+LISP Site Registration Information
+* = Some locators are down or unreachable
+# = Some registrations are sourced by reliable transport
+
+Site Name      Last      Up     Who Last              Inst     EID Prefix
+               Register         Registered            ID       
+site1          00:01:00  yes#   100.99.99.99:32906    16777214 Default-DN-String
+               never     no     --                    16777214 named-services
+msmr11#

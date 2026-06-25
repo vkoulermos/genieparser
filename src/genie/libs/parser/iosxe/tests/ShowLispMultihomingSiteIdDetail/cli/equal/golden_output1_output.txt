@@ -1,0 +1,29 @@
+iolxtr11#show lisp multihoming site-id * detail
+LISP L2 Multihoming Information for LISP top ID 0
+ 
+Multihoming Site ID: 123
+  Mode:                Single-Active
+  Peer Sync:           Enabled
+  STP Tracking:        Enabled
+  Interface(s):        Ethernet Gi1/0/1
+  Interface Status:    Down
+  L2 Host Count:       10
+  Multihoming Peers:
+    Locator       Pri/Wgt  Source     State
+    100.11.11.11   10/50   cfg-intf   site-self, reachable
+  DF Status:
+    Active: 4100
+    Standby: 4101
+ 
+Multihoming Site ID: 456
+  Mode:                Single-Active
+  Peer Sync:           Enabled
+  STP Tracking:        Enabled
+  Interface Status:    Up
+  L2 Host Count:       10
+  Multihoming Peers:
+    Locator       Pri/Wgt  Source     State
+    100.11.11.11   10/50   cfg-intf   site-self, reachable
+  DF Status:
+    Active: All
+    Standby: None

@@ -1480,6 +1480,7 @@ class SnmpGetBulk(SnmpGetBulkSchema):
             if m:
                 group = m.groupdict()
                 mib_dict = ret_dict.setdefault('mib', {}).setdefault(group['oid'], {})
+                ret_dict['status'] = 'success'
                 mib_dict['oid'] = group['oid']
                 mib_dict['value'] = group['value'].strip()
                 if group['type']:
@@ -1494,12 +1495,12 @@ class SnmpGetBulk(SnmpGetBulkSchema):
                 ret_dict['reqid'] = int(group['reqid'])
                 ret_dict['errstat'] = int(group['errstat'])
                 ret_dict['erridx'] = int(group['erridx'])
+                ret_dict['status'] = 'success'
                 last_oid = None
                 continue
 
             # Timeout
             m = p3.match(line)
-            ret_dict['status'] = 'success'
             if m:
                 ret_dict['status'] = 'timeout'
                 last_oid = None
@@ -1513,6 +1514,7 @@ class SnmpGetBulk(SnmpGetBulkSchema):
                 ret_dict['mib'][last_oid]['value'] = (
                     '{} {}'.format(existing_value, hex_line).strip()
                 )
+                ret_dict['status'] = 'success'
 
         if not ret_dict:
             raise SchemaEmptyParserError('Parser Output is empty')

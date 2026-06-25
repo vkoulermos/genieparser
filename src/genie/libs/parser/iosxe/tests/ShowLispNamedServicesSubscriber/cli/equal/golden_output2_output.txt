@@ -1,0 +1,6 @@
+msmr11#$ocator-table default instance-id 4 named-services subscriber 
+LISP Subscriber Information
+Entries total 2
+Subscriber            Type       Affinity-ID     Index          
+100.22.22.22:21892    Policy     -               1              
+100.88.88.88:56972    IID        -               2  

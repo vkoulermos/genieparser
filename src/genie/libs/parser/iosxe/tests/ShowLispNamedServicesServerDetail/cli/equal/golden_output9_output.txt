@@ -1,0 +1,62 @@
+iolmsmr11#show lisp locator-table default instance-id 4 named-services server etr-address 100.11.11.11    
+LISP Site Registration Information
+
+Site name: site1
+Allowed configured locators: any
+Allowed EID-prefixes:
+
+  EID-prefix: dual-stack instance-id 4 
+    First registered:     00:08:47
+    Last registered:      00:08:42
+    Routing table tag:    0
+    Origin:               Dynamic, more specific of all-named-services
+    Merge active:         No
+    Proxy reply:          Yes
+    Skip Publication:     No
+    Force Withdraw:       No
+    TTL:                  1d00h
+    State:                complete
+    Extranet IID:         Unspecified
+    Registration errors:  
+      Authentication failures:   0
+      Allowed locators mismatch: 0
+    ETR 100.11.11.11:63979
+      last registered 00:08:42, proxy-reply, map-notify
+      TTL 1d00h, no merge, hash-function sha1
+      state complete, no security-capability
+      nonce 0x0879AC24-0xB9E0AC4F
+      xTR-ID 0x448314C7-0xDE55C581-0xB1535180-0x5ABD34BD
+      site-ID unspecified
+      Domain-ID 1
+      Multihoming-ID unspecified
+      sourced by reliable transport
+      Locator       Local  State      Pri/Wgt  Scope       RDP             
+      100.11.11.11  yes    up          10/50   IPv4 none   [-]             
+
+  EID-prefix: firewall instance-id 4 
+    First registered:     00:08:47
+    Last registered:      00:08:42
+    Routing table tag:    0
+    Origin:               Dynamic, more specific of all-named-services
+    Merge active:         No
+    Proxy reply:          Yes
+    Skip Publication:     No
+    Force Withdraw:       No
+    TTL:                  1d00h
+    State:                complete
+    Extranet IID:         Unspecified
+    Registration errors:  
+      Authentication failures:   0
+      Allowed locators mismatch: 0
+    ETR 100.11.11.11:63979
+      last registered 00:08:42, proxy-reply, map-notify
+      TTL 1d00h, no merge, hash-function sha1
+      state complete, no security-capability
+      nonce 0x0879AC24-0xB9E0AC4F
+      xTR-ID 0x448314C7-0xDE55C581-0xB1535180-0x5ABD34BD
+      site-ID unspecified
+      Domain-ID 1
+      Multihoming-ID unspecified
+      sourced by reliable transport
+      Locator       Local  State      Pri/Wgt  Scope       RDP             
+      100.11.11.11  yes    up          10/50   IPv4 none   [-]             

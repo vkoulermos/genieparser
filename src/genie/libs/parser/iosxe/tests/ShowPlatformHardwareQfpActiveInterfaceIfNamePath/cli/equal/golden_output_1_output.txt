@@ -1,0 +1,29 @@
+Router# show platform hardware qfp active interface if-name GigabitEthernet0/0/0 path
+
+Interface Path Information
+--------------------------
+
+Interface Name : GigabitEthernet0/0/0
+Interface Index: 12
+QFP Interface  : 0x45
+State          : UP
+
+Ingress Path
+------------
+RX Path        : QFP_RX
+Feature Path   : IPv4 CEF
+Adjacency Type : Connected
+Rewrite Type   : Ethernet
+
+Egress Path
+-----------
+TX Path        : QFP_TX
+Output Feature : QoS
+Encapsulation  : ARPA
+MTU            : 1500
+
+Statistics
+----------
+Packets In Path        : 12457892
+Packets Out Path       : 12399871
+Packets Dropped        : 15

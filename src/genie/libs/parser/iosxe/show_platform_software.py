@@ -68,6 +68,7 @@
     * 'show platform software selinux'
     * show platform software access-list RP active statistics
     * show platform software ess FP active drl
+    * show platform software ess fp active l4r
 """
 
 # Python
@@ -17757,6 +17758,106 @@ class ShowPlatformSoftwareEssFpActiveDrl(ShowPlatformSoftwareEssFpActiveDrlSchem
                 records_dict = spr_dict.setdefault("records", {})
                 records_dict[record_index] = current_record
                 current_record = None
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareEssFpActiveL4rSchema(MetaParser):
+    """Schema for show platform software ess fp active l4r"""
+
+    schema = {
+        "subscriber_l4redirect_records": {
+            "total": int,
+            "entries": ListOf(
+                {
+                    "segment": str,
+                    "class_in": int,
+                    "class_out": int,
+                    "evsi": int,
+                    "srv_ip": str,
+                    "srv_port": int,
+                    "qfp_hdl": int,
+                    "aom_state": str,
+                }
+            ),
+        }
+    }
+
+
+class ShowPlatformSoftwareEssFpActiveL4r(ShowPlatformSoftwareEssFpActiveL4rSchema):
+    """Parser for show platform software ess fp active l4r"""
+
+    cli_command = "show platform software ess fp active l4r"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+        if not out:
+            return ret_dict
+
+        # Subscriber L4redirect records: Total  : 2
+        p1 = re.compile(
+            r"^Subscriber\s+L4redirect\s+records\s*:\s*Total\s*:\s*(?P<total>\d+)$"
+        )
+
+        # 0x004200fc00000018                       32          33          4325629
+        p2 = re.compile(
+            r"^(?P<segment>0x[0-9a-fA-F]+)\s+(?P<class_in>\d+)\s+(?P<class_out>\d+)\s+(?P<evsi>\d+)$"
+        )
+
+        # 3001::1                                  80          37          created
+        p3 = re.compile(
+            r"^(?P<srv_ip>\S+)\s+(?P<srv_port>\d+)\s+(?P<qfp_hdl>\d+)\s+(?P<aom_state>\S+)$"
+        )
+
+        sub_dict = None
+        temp_entry = None
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Subscriber L4redirect records: Total  : 2
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                sub_dict = ret_dict.setdefault("subscriber_l4redirect_records", {})
+                sub_dict["total"] = int(group["total"])
+                sub_dict["entries"] = []
+                continue
+
+            # Skip headers and separators
+            if line.startswith("Segment") or line.startswith("SrvIP") or set(line) == {"-"}:
+                continue
+
+            # 0x004200fc00000018                       32          33          4325629
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                temp_entry = {
+                    "segment": group["segment"],
+                    "class_in": int(group["class_in"]),
+                    "class_out": int(group["class_out"]),
+                    "evsi": int(group["evsi"]),
+                }
+                continue
+
+            # 3001::1                                  80          37          created
+            m = p3.match(line)
+            if m and temp_entry is not None and sub_dict is not None:
+                group = m.groupdict()
+                temp_entry["srv_ip"] = group["srv_ip"]
+                temp_entry["srv_port"] = int(group["srv_port"])
+                temp_entry["qfp_hdl"] = int(group["qfp_hdl"])
+                temp_entry["aom_state"] = group["aom_state"]
+                sub_dict["entries"].append(temp_entry)
+                temp_entry = None
                 continue
 
         return ret_dict

@@ -1,0 +1,25 @@
+TenGigE0/1/0/0/0.1 is Up, ipv6 protocol is Down, Vrfid is vrf_601 (0x6000025d)
+  IPv6 is down (link local duplicate), link-local address is fe80::200:ff:fe00:1bcd [DUPLICATE][ND-DAD]
+  Global unicast address(es):
+    2001:83:1:1::1, subnet is 2001:83:1:1::/64 [TENTATIVE]
+  Joined group address(es): ff02::1:ff00:1 ff02::1:ff00:1bcd ff02::2
+      ff02::1
+  MTU is 9108 (9090 is available to IPv6)
+  ICMP redirects are disabled
+  ICMP unreachables are enabled
+  ND DAD is disabled, number of DAD attempts 0
+  ND reachable time is 0 milliseconds
+  ND cache entry limit is 0
+  ND advertised retransmit interval is 0 milliseconds
+  Hosts use stateless autoconfig for addresses.
+  Outgoing access list is not set
+  Inbound  common access list is not set, access list is not set
+  Table Id is 0xe080026c
+  Complete protocol adjacency: 0
+  Complete glean adjacency: 0
+  Incomplete protocol adjacency: 0
+  Incomplete glean adjacency: 0
+  Dropped protocol request: 0
+  Dropped glean request: 0
+  RA DNS Server Address Count: 0
+  RA DNS Search list Count: 0

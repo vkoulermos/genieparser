@@ -4525,3 +4525,78 @@ class ShowRunningConfigPim(ShowRunningConfigPimSchema):
                 continue
 
         return pim_dict
+
+
+# ======================================================================
+# Parser: 'show ip pim host-proxy'
+#
+# Sample CLI output:
+#   PIM host proxy interfaces
+#   ==========================
+#   Type: SG - Host SG Proxy, H - Host Proxy
+#   Vlan70(H)       port-channel10.40(SG)    Ethernet1/1.40(H)
+#
+# Parsed output:
+#   {
+#       "intf_names": {
+#           "Vlan70": {
+#               "proxy_type": "H"
+#           },
+#           "port-channel10.40": {
+#               "proxy_type": "SG"
+#           },
+#           "Ethernet1/1.40": {
+#               "proxy_type": "H"
+#           }
+#       }
+#   }
+# ======================================================================
+
+
+class ShowIpPimHostProxySchema(MetaParser):
+    ''' Schema for:
+        * 'show ip pim host-proxy'
+    '''
+    schema = {
+        'intf_names': {
+            Any(): {  # e.g. 'Vlan70'
+                'proxy_type': str,
+            },
+        },
+    }
+
+
+class ShowIpPimHostProxy(ShowIpPimHostProxySchema):
+    ''' Parser for:
+        * 'show ip pim host-proxy'
+    '''
+    cli_command = 'show ip pim host-proxy'
+
+    def cli(self, command, output=None, **kwargs):
+        if output is None:
+            output = self.device.execute(command)
+
+        result = {}
+
+        entries = {}
+
+        # ── Compiled patterns ──
+        # Vlan70(H)        port-channel10.40(SG)
+        p1 = re.compile(r'(?<![A-Za-z0-9_./\-])(?P<intf_name>[A-Za-z0-9/\-.]+)\((?P<proxy_type>SG|H)\)')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Vlan70(H)
+            for m in p1.finditer(line):
+                g = m.groupdict()
+                key = g['intf_name']
+                entry = entries.setdefault(key, {})
+                entry['proxy_type'] = g['proxy_type']
+
+        if entries:
+            result['intf_names'] = entries
+
+        return result

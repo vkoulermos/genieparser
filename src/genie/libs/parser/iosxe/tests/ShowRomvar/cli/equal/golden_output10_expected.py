@@ -5,6 +5,7 @@ expected_output = {
         "boot": [],
         "boot_loader_upgrade_disable": "1",
         "bsi": 0,
+        "debug_conf": "/bootflash/debug.conf",
         "default_gateway": "5.40.0.1",
         "ip_address": "5.40.4.115",
         "subnet_mask": "255.255.0.0",

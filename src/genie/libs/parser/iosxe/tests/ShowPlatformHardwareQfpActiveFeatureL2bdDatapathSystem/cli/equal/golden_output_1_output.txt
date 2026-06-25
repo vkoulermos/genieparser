@@ -1,0 +1,8 @@
+show platform hardware qfp active feature l2bd datapath system
+QFP L2BD data path information:
+
+  System MAC addr learning limit: 131072;
+  Unknown mac when reaching learning limit: Flood;
+  Total mac entries: 131072;   BDI mac entries: 0;
+  Free entries: 0;
+  MAC flush in progress: 0;

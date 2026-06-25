@@ -1,0 +1,14 @@
+iolxtr11#show lisp multihoming site-id *
+LISP L2 Multihoming Information for LISP top ID 0
+ 
+Multihoming Site ID: 123
+Mode:                Single-Active
+Peer Sync:           Enabled
+STP Tracking:        Enabled
+Interface(s):        Ethernet Gi1/0/1
+ 
+Multihoming Site ID: 456
+Mode:                Single-Active
+Peer Sync:           Enabled
+STP Tracking:        Enabled
+Interface(s):        Ethernet Gi1/0/2

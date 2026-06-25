@@ -4146,11 +4146,11 @@ class ShowModuleSchema(MetaParser):
                         'card_type':str,
                         'model':str,
                         'serial':str,
-                        'mac_address':str,
-                        'hw':str,
-                        'fw':str,
-                        'sw':str,
-                        'status':str,
+                        Optional('mac_address'):str,
+                        Optional('hw'):str,
+                        Optional('fw'):str,
+                        Optional('sw'):str,
+                        Optional('status'):str,
                         Optional('redundancy_role'):str,
                         Optional('operating_redundancy_mode'):str,
                         Optional('configured_redundancy_mode'):str
@@ -9009,7 +9009,7 @@ class ShowXfsuEligibilitySchema(MetaParser):
         'reload_fast_supported': str,
         Optional('reload_fast_platform_stauts'): str,
         Optional('xfsu_platform_stauts'): str,
-        'stack_configuration': str,
+        Optional('stack_configuration'): str,
         'eligibility_check': {
             Any(): {
                 'status': str
@@ -9037,7 +9037,8 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
             output = self.device.execute(self.cli_command)
 
         # Reload fast supported: Yes
-        p1 = re.compile(r'^Reload fast supported: (?P<reload_fast_supported>\w+)$')
+        # xFSU supported:                          Yes
+        p1 = re.compile(r'^(?:Reload fast supported|xFSU supported):\s+(?P<reload_fast_supported>\w+)$')
 
         # Reload Fast PLATFORM Status: Not started yet
         p2 = re.compile(r'^Reload Fast PLATFORM Status: (?P<platform_status>[\w\s]+)$')
@@ -9052,10 +9053,11 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
         # Network Advantage License Yes
         # Full ring stack           Yes
         # Check macsec eligibility  Eligible
-        p4 = re.compile(r'^(?P<eligibility_check>[\w+ ]+) +(?P<status>Yes|No|Eligible|Ineligible)$')
+        p4 = re.compile(r'^(?P<eligibility_check>[\w\s]+?):?\s+(?P<status>Yes|No|Eligible|Ineligible|ELIGIBLE|INELIGIBLE)$')
 
         # Spanning Tree             Ineligible:Root Switch with forwarding link:VLAN0069
-        p5 = re.compile(r'^Spanning Tree\s+(?P<spanning_tree>\w+):(?P<status>[\w ]+):(?P<forwarding_link>\S+)$')
+        # Spanning Tree:                           Eligible
+        p5 = re.compile(r'^Spanning Tree:?\s+(?P<spanning_tree>\w+)(?::(?P<status>[\w ]+):(?P<forwarding_link>\S+))?$')
 
         # xFSU PLATFORM Status: Not started yet
         p6 = re.compile(r'^xFSU PLATFORM Status: (?P<xfsu_platform_stauts>[\w\s]+)$')
@@ -9095,10 +9097,10 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
             if m:
                 group = m.groupdict()
                 root_dict = ret_dict.setdefault('eligibility_check',{})
-                if group['eligibility_check'] != 'Eligibility Check':
-                    if group['status'] != 'Status':
-                        check_dict = root_dict.setdefault(group['eligibility_check'].lower().strip().replace(" ","_"),{})
-                        check_dict['status'] = group['status']
+                check_name = group['eligibility_check'].lower().strip().replace(" ","_")
+                if check_name != 'xfsu_eligibility':
+                    check_dict = root_dict.setdefault(check_name,{})
+                    check_dict['status'] = group['status'].capitalize()
                 continue
 
             # Spanning Tree             Ineligible:Root Switch with forwarding link:VLAN0069
@@ -9107,8 +9109,9 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
                 group = m.groupdict()
                 root_dict = ret_dict.setdefault('eligibility_check',{})
                 spanning_dict = root_dict.setdefault('spanning_tree',{})
-                spanning_dict['status'] = group['spanning_tree']
-                spanning_dict[group['status'].lower().strip().replace(" ","_")] = group['forwarding_link']
+                spanning_dict['status'] = group['spanning_tree'].capitalize()
+                if group.get('status') and group.get('forwarding_link'):
+                    spanning_dict[group['status'].lower().strip().replace(" ","_")] = group['forwarding_link']
                 continue
 
             # xFSU PLATFORM Status: Not started yet
@@ -13648,6 +13651,65 @@ class ShowPlatformSoftwareFedIpv6RouteSummaryInclude(ShowPlatformSoftwareFedIpv6
                 total_entries = int(m.group('total_entries'))
                 asic_dict = ret_dict.setdefault('asic', {}).setdefault(asic, {})
                 asic_dict['total_entries'] = total_entries
+                continue
+
+        return ret_dict
+
+class ShowPlatformConditionsSchema(MetaParser):
+    """Schema for show platform conditions"""
+    schema = {
+        "platform_conditions": {
+            Optional("system_status"): str,
+            Optional("conditions"): {
+                Any(): {
+                    "state": str,
+                    "details": str
+                }
+            }
+        }
+    }
+
+
+class ShowPlatformConditions(ShowPlatformConditionsSchema):
+    """Parser for show platform conditions"""
+    cli_command = "show platform conditions"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+
+        # CPU Utilization High               FALSE        Normal
+        p1 = re.compile(r'^(?P<condition>.+?)\s+(?P<state>TRUE|FALSE)\s+(?P<details>.+)$')
+
+        # System Status : HEALTHY
+        p2 = re.compile(r'^\s*System\s+Status\s*:\s*(?P<system_status>\S+)\s*$')
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # CPU Utilization High               FALSE        Normal
+            m = p1.match(line)
+            if m:
+                platform_dict = ret_dict.setdefault("platform_conditions", {})
+                conditions_dict = platform_dict.setdefault("conditions", {})
+                condition_name = m.group("condition").strip()
+                conditions_dict[condition_name] = {
+                    "state": m.group("state"),
+                    "details": m.group("details").strip()
+                }
+                continue
+
+            # System Status : HEALTHY
+            m = p2.match(line)
+            if m:
+                platform_dict = ret_dict.setdefault("platform_conditions", {})
+                platform_dict["system_status"] = m.group("system_status")
                 continue
 
         return ret_dict
