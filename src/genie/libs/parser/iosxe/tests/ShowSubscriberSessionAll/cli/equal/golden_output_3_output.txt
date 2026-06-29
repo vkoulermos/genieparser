@@ -1,0 +1,3 @@
+show subscriber session all
+
+Current Subscriber Information: Total sessions 0

@@ -1,0 +1,12 @@
+iolmsmr11#show lisp instance-id 4 named-services server
+LISP Site Registration Information
+* = Some locators are down or unreachable
+# = Some registrations are sourced by reliable transport
+
+Site Name      Last      Up     Who Last              Inst     EID Prefix
+               Register         Registered            ID       
+site1          never     no     --                    4        all-named-services
+               00:05:52  yes#   100.22.22.22:11323    4        default-etr
+               00:05:51  yes#   100.11.11.11:63979    4        dual-stack
+               00:05:51  yes#   100.11.11.11:63979    4        firewall
+               00:05:52  yes#   100.22.22.22:11323    4        internet

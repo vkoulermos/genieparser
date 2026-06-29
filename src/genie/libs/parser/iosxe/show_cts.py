@@ -2731,6 +2731,7 @@ class ShowCtsSxpConnectionsSchema(MetaParser):
         'default_key_chain_name': str,
         'default_pwd': str,
         'default_source_ip': str,
+        Optional('default_source_ipv6'): str,
         'export_traverse_limit': str,
         'highest_version': int,
         'import_traverse_limit': str,
@@ -2748,7 +2749,8 @@ class ShowCtsSxpConnectionsSchema(MetaParser):
             'conn_version': int,
             'duration': str,
             'local_mode': str,
-            'peer_ip': str,
+            Optional('peer_ip'): str,
+            Optional('peer_ipv6'): str,
             'source_ip': str,
             'tcp_conn_fd': str,
             'tcp_conn_pwd': str
@@ -2774,7 +2776,6 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
 
         # initial return dictionary
         result_dict = {}
-
         #  SXP              : Enabled
         p1 = re.compile(r"^SXP\s+:\s+(?P<sxp_status>(Disabled|Enabled))$")
         #  Highest Version Supported: 4
@@ -2787,6 +2788,8 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
         p5 = re.compile(r"^Default\s+Key-Chain\s+Name:\s+(?P<default_key_chain_name>(Not\s+Applicable|\S+))$")
         #  Default Source IP: 192.168.2.24
         p6 = re.compile(r"^Default\s+Source\s+IP:\s+(?P<default_source_ip>(Not\s+Set|[\d+\.]+))$")
+        # Default Source IPv6: Not Set
+        p6_1 = re.compile(r"^Default\s+Source\s+IPv6:\s+(?P<default_source_ipv6>(Not\s+Set|[\d+\.]+))$")
         # Connection retry open period: 120 secs
         p7 = re.compile(r"^Connection\s+retry\s+open\s+period:\s+(?P<retry_period>\d+)\s+secs$")
         # Reconcile period: 120 secs
@@ -2799,8 +2802,11 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
         p11 = re.compile(r"^Peer-Sequence\s+traverse\s+limit\s+for\s+import:\s+(?P<import_traverse_limit>(Not\s+Set|\S+))$")
         # Peer IP          : 10.1.1.2
         p12 = re.compile(r"^Peer\s+IP\s+:\s+(?P<peer_ip>[\d\.]+)$")
+        # Peer IP : 1133:1:1::2
+        p12_1 = re.compile(r'^Peer IP\s*:\s*(?P<peer_ipv6>[\da-fA-F:.]+)$')
         # Source IP        : 10.1.1.1
-        p13 = re.compile(r"^Source\s+IP\s+:\s+(?P<source_ip>[\d\.]+)$")
+        # Source IP : 1133:1:1::1
+        p13 = re.compile(r"^Source\s+IP\s*:\s*(?P<source_ip>[\d\.]+|[\da-fA-F:]+)$")
         # Conn status      : On
         p14 = re.compile(r"^Conn\s+status\s+:\s+(?P<conn_status>.*$)$")
         # Conn version     : 5
@@ -2875,7 +2881,14 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
                 group = m6.groupdict()
                 result_dict.update(group)
                 continue
-
+            
+            # Default Source IPv6: Not Set
+            m6_1 = p6_1.match(line)
+            if m6_1:
+                group = m6_1.groupdict()
+                result_dict.update(group)
+                continue
+            
             # Connection retry open period: 120 secs
             m7 = p7.match(line)
             if m7:
@@ -2914,19 +2927,28 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
                 continue
 
             # Peer IP          : 10.1.1.2
-            m12 = p12.match(line)
+            # Peer IP : 1133:1:1::2
+            m12 = p12.match(line) or p12_1.match(line)
             if m12:
                 group = m12.groupdict()
-                peer_dict = result_dict.setdefault(group['peer_ip'], group)
+                peer_ip = group.get('peer_ip') or group.get('peer_ipv6')
+                peer_dict = result_dict.setdefault(peer_ip, {})
+                if ':' in peer_ip:
+                    peer_dict['peer_ipv6'] = peer_ip
+                else:
+                    peer_dict['peer_ip'] = peer_ip
                 continue
-
+            
             # Source IP        : 10.1.1.1
+            # Source IP : 1133:1:1::1
             m13 = p13.match(line)
-            if m13:
+            if m13 and peer_dict is not None:
                 group = m13.groupdict()
-                peer_dict.update(group)
+                peer_dict['source_ip'] = group['source_ip']
                 continue
 
+            #Source IP : 1133:1:1::1
+            
             # Conn status      : On
             # Conn status      : On (Speaker) :: On (Listener)
             m14 = p14.match(line)
@@ -3022,8 +3044,8 @@ class ShowCtsSxpConnections(ShowCtsSxpConnectionsSchema):
                 peer_dict.update(group)
                 continue
 
-        return result_dict
-
+        return result_dict  
+        
 
 class ShowCtsSxpSgtMapBriefSchema(MetaParser):
     """
@@ -4343,20 +4365,26 @@ class ShowCtsCredentials(ShowCtsCredentialsSchema):
 class ShowCtsSxpSgtMapSchema(MetaParser):
     """Schema for show cts sxp sgt-map"""
     schema = {
-        'sxp_node_id_generated': str,
-        'sxp_ipv6_node_id_generated': str,
+        Optional('sxp_node_id_generated'): str,
+        Optional('sxp_node_id_configured'): str,
+        Optional('sxp_ipv6_node_id_generated'): str,
+        Optional('sxp_ipv6_node_id_configured'): str,
         Optional('ip_sgt_mappings'): ListOf(dict),
-        Optional('total_number_of_ip_sgt_mappings'): int
+        'total_number_of_ip_sgt_mappings': int
     }
 
 class ShowCtsSxpSgtMap(ShowCtsSxpSgtMapSchema):
     """Parser for show cts sxp sgt-map"""
 
-    cli_command = 'show cts sxp sgt-map'
+    cli_command = ['show cts sxp sgt-map', 'show cts sxp sgt-map vrf {vrf}']
 
-    def cli(self, output=None):
+    def cli(self, vrf='', output=None):
         if output is None:
-            output = self.device.execute(self.cli_command)
+            if vrf:
+                cmd = self.cli_command[1].format(vrf=vrf)
+            else:
+                cmd = self.cli_command[0]
+            output = self.device.execute(cmd)
 
         ret_dict = {}
         ip_sgt_mappings = []
@@ -4364,10 +4392,14 @@ class ShowCtsSxpSgtMap(ShowCtsSxpSgtMapSchema):
         current_type = None
 
         # SXP Node ID(generated):0xAC171B96(172.23.27.150)
-        p0 = re.compile(r'^SXP Node ID\(generated\):(?P<node_id>.+)$')
+        # SXP Node ID(configured):0x0000ABCD(0.0.171.205)
+        p0 = re.compile(r'^SXP Node ID\((?P<type>generated|configured)\):(?P<node_id>.+)$')
 
         # SXP IPv6 Node ID(generated):1133:1:1::2
         p1 = re.compile(r'^SXP IPv6 Node ID\(generated\):(?P<ipv6_node_id>.+)$')
+
+        # SXP IPv6 Node ID(configured):1133:1:1::2
+        p1_2 = re.compile(r'^SXP IPv6 Node ID\(configured\):(?P<ipv6_node_id_configured>.+)$')
 
         # IPv4,SGT: <100.1.1.123 , 100>
         # IPv6,SGT: <100:1::123 , 100>
@@ -4394,21 +4426,35 @@ class ShowCtsSxpSgtMap(ShowCtsSxpSgtMapSchema):
         # Total number of IP-SGT Mappings: 10
         p9 = re.compile(r'^Total number of IP-SGT Mappings:\s*(?P<total>\d+)$')
 
+        # There are no IP-SGT Mappings
+        p10 = re.compile(r'^There are no IP-SGT Mappings$')
+
         for line in output.splitlines():
             line = line.strip()
             if not line:
                 continue
 
             # SXP Node ID(generated):0xAC171B96(172.23.27.150)
+            # SXP Node ID(configured):0xAC171C96(172.23.27.10)
             m = p0.match(line)
             if m:
-                ret_dict['sxp_node_id_generated'] = m.group('node_id')
+                node_type = m.group('type')
+                if node_type == 'generated':
+                    ret_dict['sxp_node_id_generated'] = m.group('node_id')
+                else:
+                    ret_dict['sxp_node_id_configured'] = m.group('node_id')
                 continue
 
             # SXP IPv6 Node ID(generated):1133:1:1::2
             m = p1.match(line)
             if m:
                 ret_dict['sxp_ipv6_node_id_generated'] = m.group('ipv6_node_id')
+                continue
+
+            # SXP IPv6 Node ID(configured):1133:1:1::2
+            m = p1_2.match(line)
+            if m:
+                ret_dict['sxp_ipv6_node_id_configured'] = m.group('ipv6_node_id_configured')
                 continue
 
             # IPv4,SGT: <100.1.1.123 , 100>
@@ -4467,6 +4513,12 @@ class ShowCtsSxpSgtMap(ShowCtsSxpSgtMapSchema):
                 ret_dict['total_number_of_ip_sgt_mappings'] = int(m.group('total'))
                 continue
 
+            # There are no IP-SGT Mappings
+            m = p10.match(line)
+            if m:
+                ret_dict['total_number_of_ip_sgt_mappings'] = 0
+                continue
+
         # Append the last mapping if it exists
         if current_mapping:
             ip_sgt_mappings.append(current_mapping)
@@ -4474,4 +4526,126 @@ class ShowCtsSxpSgtMap(ShowCtsSxpSgtMapSchema):
         if ip_sgt_mappings:
             ret_dict['ip_sgt_mappings'] = ip_sgt_mappings
 
+        return ret_dict
+
+
+class ShowCtsSxpExportImportGroupDetailedSchema(MetaParser):
+    """Schema for show cts sxp export-import-group {role} detailed"""
+    
+    schema = {
+        "export_import_group_name": str,
+        Optional("export_list_name"): str,
+        Optional("import_list_name"): str,
+        Optional("vrf"): str,
+        Optional("peers"): ListOf(str)
+    }
+
+class ShowCtsSxpExportImportGroupDetailed(ShowCtsSxpExportImportGroupDetailedSchema):
+    """Parser for show cts sxp export-import-group {role} detailed"""
+    
+    cli_command = "show cts sxp export-import-group {role} detailed"
+    
+    def cli(self, role='', output=None):
+        if output is None:
+            cmd = self.cli_command.format(role=role)
+            output = self.device.execute(cmd)
+        
+        ret_dict = {}
+        peers = []
+
+        # Export-import-group line
+        p0 = re.compile(r"Export-import-group:\s*(?P<export_import_group_name>\S+)")
+        
+        # Export-list name line
+        p1 = re.compile(r"Export-list name:\s*(?P<export_list_name>\S+)")
+        
+        # Import-list name line
+        p2 = re.compile(r"Import-list name:\s*(?P<import_list_name>\S+)")
+        
+        # vrf line
+        p3 = re.compile(r"vrf\s+(?P<vrf>\S+)")
+        
+        # peer line
+        p4 = re.compile(r"peer\s+(?P<peer_ip>[0-9a-fA-F:.]+)")
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Export-import-group line
+            m = p0.match(line)
+            if m:
+                ret_dict['export_import_group_name'] = m.group('export_import_group_name')
+                continue
+            
+            # Export-list name line
+            m = p1.match(line)
+            if m:
+                ret_dict['export_list_name'] = m.group('export_list_name')
+                continue
+            
+            # Import-list name line
+            m = p2.match(line)
+            if m:
+                ret_dict['import_list_name'] = m.group('import_list_name')
+                continue
+            
+            # vrf line
+            m = p3.match(line)
+            if m:
+                ret_dict['vrf'] = m.group('vrf')
+                continue
+
+            # peer line
+            m = p4.match(line)
+            if m:
+                peers.append(m.group('peer_ip'))
+                continue
+
+        if peers:
+            ret_dict['peers'] = peers
+
+        return ret_dict
+
+class ShowCtsKeyStoreSchema(MetaParser):
+    schema = {
+        'keystore': {
+            Any(): {
+                'index': int,
+                'type': str,
+                'name': str
+            }
+        }
+    }
+
+class ShowCtsKeyStore(ShowCtsKeyStoreSchema):
+    """Parser for:
+      show cts keystore
+    """
+
+    cli_command = 'show cts keystore'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        # 0 S CTS-password
+        p1 = re.compile(r'^(?P<index>\d+)\s+(?P<type>\S+)\s+(?P<name>.+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # 0 S CTS-password   
+            m = p1.match(line)       
+            if m:
+                group = m.groupdict()
+                keystore_dict = ret_dict.setdefault('keystore', {}).setdefault(group['index'], {})
+                keystore_dict['index'] = int(group['index'])
+                keystore_dict['type'] = group['type']
+                keystore_dict['name'] = group['name']
+                continue
+        
         return ret_dict

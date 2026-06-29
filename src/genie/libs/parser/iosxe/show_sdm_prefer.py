@@ -65,7 +65,7 @@ class ShowSdmPreferSchema(MetaParser):
             Optional('sgt_dgt_vpn_overflow_entries'): int, 
             Optional('wired_clients'): int, 
             Optional('macsec_spd_entries'): int, 
-            'vrf_count': int, 
+            Optional('vrf_count'): int, 
             Optional('mpls_labels'): int, 
             Optional('mpls_l3_vpn_routes_vrf_mode'): int, 
             Optional('mpls_l3_vpn_routes_prefix_mode'): int, 

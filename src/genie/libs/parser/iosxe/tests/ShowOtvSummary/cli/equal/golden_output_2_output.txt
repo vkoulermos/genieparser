@@ -1,0 +1,12 @@
+Router# show otv summary
+
+OTV Configuration Information, Site Bridge-Domain: 10
+
+Overlay VPN Name        Control Group   Data Group(s)     Join Interface State
+1       Northeast       225.22.22.22    232.5.0.0/8       Gi0/0/0        UP
+                                        232.5.1.0/8
+                                        232.5.2.0/8
+2       Southwest       225.33.33.33    232.6.0.0/8       Gi0/0/1        UP
+                                        232.6.1.0/8
+
+Total Overlay(s): 2

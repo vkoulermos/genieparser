@@ -3,6 +3,11 @@
 IOSXE parser for the following show command:
     * show ospfv3 summary-prefix
     * show ospfv3 rib redistribution
+    * show ospfv3 vrf {vrf} rib redistribution
+    * show ospfv3 database external
+    * show ospfv3 vrf {vrf} database external
+    * show ospfv3 database nssa-external
+    * show ospfv3 vrf {vrf} database nssa-external
 """
 
 # python
@@ -2122,10 +2127,14 @@ class ShowRunSectionOspfv3(ShowRunSectionOspfv3Schema):
 
 # =================================================================
 # Schema for:
-#   * 'Show ospfv3 rib redistribution'
+#   * 'show ospfv3 rib redistribution'
+#   * 'show ospfv3 vrf {vrf} rib redistribution'
 # =================================================================
 class ShowOspfv3RibRedistributionSchema(MetaParser):
-    """Schema for show ospfv3 rib redistribution"""
+    """Schema for:
+        * show ospfv3 rib redistribution
+        * show ospfv3 vrf {vrf} rib redistribution
+    """
 
     schema = {
         "vrf": {
@@ -2141,6 +2150,7 @@ class ShowOspfv3RibRedistributionSchema(MetaParser):
                                         "metric": int,
                                         "tag": int,
                                         "origin": str,
+                                        Optional("source_vrf"): str,
                                         Optional("via_network"): str,
                                         Optional("interface"): str,
                                     }
@@ -2156,28 +2166,39 @@ class ShowOspfv3RibRedistributionSchema(MetaParser):
 
 # ========================================================
 # Parser for:
-#   * 'Show ospfv3 rib redistribution'
+#   * 'show ospfv3 rib redistribution'
+#   * 'show ospfv3 vrf {vrf} rib redistribution'
 # ========================================================
 class ShowOspfv3RibRedistribution(ShowOspfv3RibRedistributionSchema):
-    """Parser for show ospfv3 rib redistribution"""
+    """Parser for:
+        * show ospfv3 rib redistribution
+        * show ospfv3 vrf {vrf} rib redistribution
+    """
 
-    cli_command = "show ospfv3 rib redistribution"
+    cli_command = [
+        "show ospfv3 rib redistribution",
+        "show ospfv3 vrf {vrf} rib redistribution",
+    ]
 
-    def cli(self, output=None):
+    def cli(self, output=None, vrf=""):
         if output is None:
-            output = self.device.execute(self.cli_command)
+            if vrf:
+                cmd = self.cli_command[1].format(vrf=vrf)
+            else:
+                cmd = self.cli_command[0]
+            output = self.device.execute(cmd)
 
         # OSPFv3 1 address-family ipv4 (router-id 100.1.1.1)
         # OSPFv3 10 address-family ipv4 vrf red (router-id 40.60.0.60)
         p1 = re.compile(
-            r"OSPFv3 (?P<instance>\d+)+ address-family (?P<address_family>\S+)\s+((vrf (?P<vrf>\S+) )?)+\(router-id (?P<router_id>\S+)\)"
+            r"^OSPFv3 +(?P<instance>\d+) +address-family +(?P<address_family>\S+)"
+            r"(?: +vrf +(?P<vrf>\S+))? +\(router-id +(?P<router_id>\S+)\)$"
         )
 
         # 11.1.1.0/24, type 2, metric 1, tag 200, from bgp 100
         # via 192.46.1.6
         # 33::2/128, type 2, metric 20, tag 0, from connected (connected)
         # via Loopback1
-
         p2 = re.compile(
             r"(?P<network>\S+), type (?P<type>\d+), metric (?P<metric>\d+), tag (?P<tag>\d+), from (?P<from>.*)$"
         )
@@ -2185,6 +2206,9 @@ class ShowOspfv3RibRedistribution(ShowOspfv3RibRedistributionSchema):
         # via 40.60.1.40, Ethernet0/2
         # via Null0
         p3 = re.compile(r"via ((?P<via_network>\S+),)?\s*(?P<interface>\S+)")
+
+        # (vrf VRF1)
+        p_vrf = re.compile(r"^.*\(vrf (?P<source_vrf>[^)]+)\).*$")
 
         # initial variables
         ret_dict = {}
@@ -2231,6 +2255,9 @@ class ShowOspfv3RibRedistribution(ShowOspfv3RibRedistributionSchema):
                 network_dict.update(
                     type=int(type), metric=int(metric), tag=int(tag), origin=origin
                 )
+                vrf_match = p_vrf.search(origin)
+                if vrf_match:
+                    network_dict["source_vrf"] = vrf_match.group("source_vrf")
                 continue
 
             #  via 40.60.1.40, Ethernet0/2
@@ -2316,5 +2343,537 @@ class ShowOspfv3NeighborInterface(ShowOspfv3NeighborInterfaceSchema):
                 neighbor_dict['dead_time'] = group['dead_time']
                 neighbor_dict['interface_id'] = int(group['interface_id'])
                 neighbor_dict['interface_name'] = group['interface_name']
+
+        return ret_dict
+
+
+# =================================================================
+# Schema for:
+#   * 'show ospfv3 database external'
+#   * 'show ospfv3 vrf {vrf} database external'
+# =================================================================
+class ShowOspfv3DatabaseExternalSchema(MetaParser):
+    """Schema for:
+        * show ospfv3 database external
+        * show ospfv3 vrf {vrf} database external
+    """
+
+    schema = {
+        "vrf": {
+            Any(): {
+                "address_family": {
+                    Any(): {
+                        "instance": {
+                            Any(): {
+                                "router_id": str,
+                                Optional("network"): {
+                                    Any(): {
+                                        "ls_age": int,
+                                        "ls_type": str,
+                                        "link_state_id": str,
+                                        "advertising_router": str,
+                                        "ls_seq_number": str,
+                                        "checksum": str,
+                                        "length": int,
+                                        "prefix_address": str,
+                                        "prefix_length": int,
+                                        "options": str,
+                                        "metric_type": int,
+                                        "metric": int,
+                                        Optional(
+                                            "forward_address"
+                                        ): str,
+                                        Optional(
+                                            "external_route_tag"
+                                        ): int,
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+# ========================================================
+# Parser for:
+#   * 'show ospfv3 database external'
+#   * 'show ospfv3 vrf {vrf} database external'
+# ========================================================
+class ShowOspfv3DatabaseExternal(ShowOspfv3DatabaseExternalSchema):
+    """Parser for:
+        * show ospfv3 database external
+        * show ospfv3 vrf {vrf} database external
+    """
+
+    cli_command = [
+        "show ospfv3 database external",
+        "show ospfv3 vrf {vrf} database external",
+    ]
+
+    def cli(self, vrf="", output=None):
+        if isinstance(output, dict):
+            return output
+
+        if output is None:
+            if vrf:
+                cmd = self.cli_command[1].format(vrf=vrf)
+            else:
+                cmd = self.cli_command[0]
+            output = self.device.execute(cmd)
+
+        # OSPFv3 100 address-family ipv6 (router-id 2.2.2.2)
+        # OSPFv3 100 address-family ipv6 vrf VRF1 (router-id 2.2.2.2)
+        # OSPFv3 10 address-family ipv4 (router-id 40.60.0.60)
+        # OSPFv3 10 address-family ipv4 vrf red (router-id 40.60.0.60)
+        p1 = re.compile(
+            r"^OSPFv3 +(?P<instance>\d+) +address-family +(?P<address_family>\S+)"
+            r"(?: +vrf +(?P<vrf>\S+))? +\(router-id +(?P<router_id>\S+)\)$"
+        )
+
+        # LS age: 124
+        p_ls_age = re.compile(r"^LS age: (?P<ls_age>\d+)$")
+        # LS Type: AS External Link
+        p_ls_type = re.compile(r"^LS Type: (?P<ls_type>.+)$")
+        # Link State ID: 0
+        p_lsid = re.compile(r"^Link State ID: (?P<link_state_id>\S+)$")
+        # Advertising Router: 2.2.2.2
+        p_adv = re.compile(r"^Advertising Router: (?P<advertising_router>\S+)$")
+        # LS Seq Number: 80000003
+        p_seq = re.compile(r"^LS Seq Number: (?P<ls_seq_number>\S+)$")
+        # Checksum: 0xAC0B
+        p_cksum = re.compile(r"^Checksum: (?P<checksum>\S+)$")
+        # Length: 36
+        p_len = re.compile(r"^Length: (?P<length>\d+)$")
+        # Prefix Address: 10.30.0.1
+        p_prefix = re.compile(r"^Prefix Address: (?P<prefix_address>\S+)$")
+        # Prefix Length: 32, Options: None
+        p_prefix_len = re.compile(
+            r"^Prefix Length: (?P<prefix_length>\d+), Options: (?P<options>\S+)$"
+        )
+        # Metric Type: 2 (Larger than any link state path)
+        p_metric_type = re.compile(r"^Metric Type: (?P<metric_type>\d+)\s*\(.*\)$")
+        # Metric: 20
+        p_metric = re.compile(r"^Metric: (?P<metric>\d+)$")
+        # Forward Address: 2001:DB8:23::2
+        p_fwd = re.compile(r"^Forward Address: (?P<forward_address>\S+)$")
+        # External Route Tag: 3300
+        p_tag = re.compile(r"^External Route Tag: (?P<tag>\d+)$")
+
+        ret_dict = {}
+        process_id_dict = None
+        network_dict = None
+        current_prefix = None
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # OSPFv3 100 address-family ipv6 (router-id 3.3.3.3)
+            m = p1.match(line)
+            if m:
+                if network_dict and current_prefix and process_id_dict:
+                    process_id_dict.setdefault("network", {})[
+                        current_prefix
+                    ] = dict(network_dict)
+                    network_dict = None
+                    current_prefix = None
+                group = m.groupdict()
+                router_id = str(group["router_id"])
+                instance = int(group["instance"])
+                af = str(group["address_family"])
+                vrf_name = str(group["vrf"])
+                if vrf_name == "None":
+                    vrf_name = "default"
+                process_id_dict = (
+                    ret_dict.setdefault("vrf", {})
+                    .setdefault(vrf_name, {})
+                    .setdefault("address_family", {})
+                    .setdefault(af, {})
+                    .setdefault("instance", {})
+                    .setdefault(instance, {})
+                )
+                process_id_dict.update({"router_id": router_id})
+                continue
+
+            # LS age: 124
+            m = p_ls_age.match(line)
+            if m:
+                if network_dict and current_prefix and process_id_dict:
+                    process_id_dict.setdefault("network", {})[
+                        current_prefix
+                    ] = dict(network_dict)
+                network_dict = {}
+                current_prefix = None
+                network_dict["ls_age"] = int(m.group("ls_age"))
+                continue
+
+            if network_dict is None:
+                continue
+
+            # LS Type: AS External Link
+            m = p_ls_type.match(line)
+            if m:
+                network_dict["ls_type"] = m.group("ls_type")
+                continue
+
+            # Link State ID: 0
+            m = p_lsid.match(line)
+            if m:
+                network_dict["link_state_id"] = m.group("link_state_id")
+                continue
+
+            # Advertising Router: 2.2.2.2
+            m = p_adv.match(line)
+            if m:
+                network_dict["advertising_router"] = m.group(
+                    "advertising_router"
+                )
+                continue
+
+            # LS Seq Number: 80000003
+            m = p_seq.match(line)
+            if m:
+                network_dict["ls_seq_number"] = m.group("ls_seq_number")
+                continue
+
+            # Checksum: 0xAC0B
+            m = p_cksum.match(line)
+            if m:
+                network_dict["checksum"] = m.group("checksum")
+                continue
+
+            # Length: 36
+            m = p_len.match(line)
+            if m:
+                network_dict["length"] = int(m.group("length"))
+                continue
+
+            # Prefix Address: 10.30.0.1
+            m = p_prefix.match(line)
+            if m:
+                network_dict["prefix_address"] = m.group("prefix_address")
+                continue
+
+            # Prefix Length: 32, Options: None
+            m = p_prefix_len.match(line)
+            if m:
+                network_dict["prefix_length"] = int(m.group("prefix_length"))
+                network_dict["options"] = m.group("options")
+                prefix_addr = network_dict.get("prefix_address")
+                if prefix_addr:
+                    current_prefix = "{0}/{1}".format(
+                        prefix_addr, network_dict["prefix_length"]
+                    )
+                continue
+
+            # Metric Type: 2 (Larger than any link state path)
+            m = p_metric_type.match(line)
+            if m:
+                network_dict["metric_type"] = int(m.group("metric_type"))
+                continue
+
+            # Metric: 20
+            m = p_metric.match(line)
+            if m:
+                network_dict["metric"] = int(m.group("metric"))
+                continue
+
+            # Forward Address: 2001:DB8:23::2
+            m = p_fwd.match(line)
+            if m:
+                network_dict["forward_address"] = m.group("forward_address")
+                continue
+
+            # External Route Tag: 3300
+            m = p_tag.match(line)
+            if m:
+                network_dict["external_route_tag"] = int(m.group("tag"))
+                continue
+
+        if network_dict and current_prefix and process_id_dict:
+            process_id_dict.setdefault("network", {})[current_prefix] = dict(
+                network_dict
+            )
+
+        return ret_dict
+
+
+# =================================================================
+# Schema for:
+#   * 'show ospfv3 database nssa-external'
+#   * 'show ospfv3 vrf {vrf} database nssa-external'
+# =================================================================
+class ShowOspfv3DatabaseNssaExternalSchema(MetaParser):
+    """Schema for:
+        * show ospfv3 database nssa-external
+        * show ospfv3 vrf {vrf} database nssa-external
+    """
+
+    schema = {
+        "vrf": {
+            Any(): {
+                "address_family": {
+                    Any(): {
+                        "instance": {
+                            Any(): {
+                                "router_id": str,
+                                Optional("area"): {
+                                    Any(): {
+                                        Optional("network"): {
+                                            Any(): {
+                                                "ls_age": int,
+                                                "ls_type": str,
+                                                "link_state_id": str,
+                                                "advertising_router": str,
+                                                "ls_seq_number": str,
+                                                "checksum": str,
+                                                "length": int,
+                                                "prefix_address": str,
+                                                "prefix_length": int,
+                                                "options": str,
+                                                "metric_type": int,
+                                                "metric": int,
+                                                Optional(
+                                                    "forward_address"
+                                                ): str,
+                                                Optional(
+                                                    "external_route_tag"
+                                                ): int,
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+# ========================================================
+# Parser for:
+#   * 'show ospfv3 database nssa-external'
+#   * 'show ospfv3 vrf {vrf} database nssa-external'
+# ========================================================
+class ShowOspfv3DatabaseNssaExternal(ShowOspfv3DatabaseNssaExternalSchema):
+    """Parser for:
+        * show ospfv3 database nssa-external
+        * show ospfv3 vrf {vrf} database nssa-external
+    """
+
+    cli_command = [
+        "show ospfv3 database nssa-external",
+        "show ospfv3 vrf {vrf} database nssa-external",
+    ]
+
+    def cli(self, vrf="", output=None):
+        if isinstance(output, dict):
+            return output
+
+        if output is None:
+            if vrf:
+                cmd = self.cli_command[1].format(vrf=vrf)
+            else:
+                cmd = self.cli_command[0]
+            output = self.device.execute(cmd)
+
+        # OSPFv3 100 address-family ipv6 (router-id 3.3.3.3)
+        # OSPFv3 100 address-family ipv6 vrf VRF1 (router-id 3.3.3.3)
+        p1 = re.compile(
+            r"^OSPFv3 +(?P<instance>\d+) +address-family +(?P<address_family>\S+)"
+            r"(?: +vrf +(?P<vrf>\S+))? +\(router-id +(?P<router_id>\S+)\)$"
+        )
+
+        # Type-7 AS External Link States (Area 10)
+        p_area = re.compile(
+            r"^Type-7 +AS +External +Link +States +\(Area +(?P<area>\S+)\)$"
+        )
+        # LS age: 8
+        p_ls_age = re.compile(r"^LS age: (?P<ls_age>\d+)$")
+        # LS Type: AS External Link
+        p_ls_type = re.compile(r"^LS Type: (?P<ls_type>.+)$")
+        # Link State ID: 10
+        p_lsid = re.compile(r"^Link State ID: (?P<link_state_id>\S+)$")
+        # Advertising Router: 2.2.2.2
+        p_adv = re.compile(r"^Advertising Router: (?P<advertising_router>\S+)$")
+        # LS Seq Number: 80000001
+        p_seq = re.compile(r"^LS Seq Number: (?P<ls_seq_number>\S+)$")
+        # Checksum: 0xE043
+        p_cksum = re.compile(r"^Checksum: (?P<checksum>\S+)$")
+        # Length: 28
+        p_len = re.compile(r"^Length: (?P<length>\d+)$")
+        # Prefix Address: 0.0.0.0
+        p_prefix = re.compile(r"^Prefix Address: (?P<prefix_address>\S+)$")
+        # Prefix Length: 0, Options: None
+        p_prefix_len = re.compile(
+            r"^Prefix Length: (?P<prefix_length>\d+), Options: (?P<options>\S+)$"
+        )
+        # Metric Type: 2 (Larger than any link state path)
+        p_metric_type = re.compile(r"^Metric Type: (?P<metric_type>\d+)\s*\(.*\)$")
+        # Metric: 1
+        p_metric = re.compile(r"^Metric: (?P<metric>\d+)$")
+        # Forward Address: 2001:DB8:23::2
+        p_fwd = re.compile(r"^Forward Address: (?P<forward_address>\S+)$")
+        # External Route Tag: 3300
+        p_tag = re.compile(r"^External Route Tag: (?P<tag>\d+)$")
+
+        ret_dict = {}
+        process_id_dict = None
+        area_dict = None
+        network_dict = None
+        current_prefix = None
+        current_area = None
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # OSPFv3 100 address-family ipv6 (router-id 3.3.3.3)
+            m = p1.match(line)
+            if m:
+                if network_dict and current_prefix and area_dict is not None:
+                    area_dict.setdefault("network", {})[
+                        current_prefix
+                    ] = dict(network_dict)
+                    network_dict = None
+                    current_prefix = None
+                group = m.groupdict()
+                router_id = str(group["router_id"])
+                instance = int(group["instance"])
+                af = str(group["address_family"])
+                vrf_name = str(group["vrf"])
+                if vrf_name == "None":
+                    vrf_name = "default"
+                process_id_dict = (
+                    ret_dict.setdefault("vrf", {})
+                    .setdefault(vrf_name, {})
+                    .setdefault("address_family", {})
+                    .setdefault(af, {})
+                    .setdefault("instance", {})
+                    .setdefault(instance, {})
+                )
+                process_id_dict.update({"router_id": router_id})
+                current_area = None
+                area_dict = None
+                continue
+
+            # Type-7 AS External Link States (Area 10)
+            m = p_area.match(line)
+            if m:
+                if network_dict and current_prefix and area_dict is not None:
+                    area_dict.setdefault("network", {})[
+                        current_prefix
+                    ] = dict(network_dict)
+                    network_dict = None
+                    current_prefix = None
+                current_area = m.group("area")
+                if process_id_dict is not None:
+                    area_dict = process_id_dict.setdefault(
+                        "area", {}
+                    ).setdefault(current_area, {})
+                continue
+
+            # LS age: 8
+            m = p_ls_age.match(line)
+            if m:
+                if network_dict and current_prefix and area_dict is not None:
+                    area_dict.setdefault("network", {})[
+                        current_prefix
+                    ] = dict(network_dict)
+                network_dict = {}
+                current_prefix = None
+                network_dict["ls_age"] = int(m.group("ls_age"))
+                continue
+
+            if network_dict is None:
+                continue
+
+            # LS Type: AS External Link
+            m = p_ls_type.match(line)
+            if m:
+                network_dict["ls_type"] = m.group("ls_type")
+                continue
+
+            # Link State ID: 10
+            m = p_lsid.match(line)
+            if m:
+                network_dict["link_state_id"] = m.group("link_state_id")
+                continue
+
+            # Advertising Router: 2.2.2.2
+            m = p_adv.match(line)
+            if m:
+                network_dict["advertising_router"] = m.group(
+                    "advertising_router"
+                )
+                continue
+
+            # LS Seq Number: 80000001
+            m = p_seq.match(line)
+            if m:
+                network_dict["ls_seq_number"] = m.group("ls_seq_number")
+                continue
+
+            # Checksum: 0xE043
+            m = p_cksum.match(line)
+            if m:
+                network_dict["checksum"] = m.group("checksum")
+                continue
+
+            # Length: 28
+            m = p_len.match(line)
+            if m:
+                network_dict["length"] = int(m.group("length"))
+                continue
+
+            # Prefix Address: 0.0.0.0
+            m = p_prefix.match(line)
+            if m:
+                network_dict["prefix_address"] = m.group("prefix_address")
+                continue
+
+            # Prefix Length: 0, Options: None
+            m = p_prefix_len.match(line)
+            if m:
+                network_dict["prefix_length"] = int(m.group("prefix_length"))
+                network_dict["options"] = m.group("options")
+                prefix_addr = network_dict.get("prefix_address")
+                if prefix_addr:
+                    current_prefix = "{0}/{1}".format(
+                        prefix_addr, network_dict["prefix_length"]
+                    )
+                continue
+
+            # Metric Type: 2 (Larger than any link state path)
+            m = p_metric_type.match(line)
+            if m:
+                network_dict["metric_type"] = int(m.group("metric_type"))
+                continue
+
+            # Metric: 1
+            m = p_metric.match(line)
+            if m:
+                network_dict["metric"] = int(m.group("metric"))
+                continue
+
+            # Forward Address: 2001:DB8:23::2
+            m = p_fwd.match(line)
+            if m:
+                network_dict["forward_address"] = m.group("forward_address")
+                continue
+
+            # External Route Tag: 3300
+            m = p_tag.match(line)
+            if m:
+                network_dict["external_route_tag"] = int(m.group("tag"))
+                continue
+
+        if network_dict and current_prefix and area_dict is not None:
+            area_dict.setdefault("network", {})[current_prefix] = dict(
+                network_dict
+            )
 
         return ret_dict

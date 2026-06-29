@@ -205,6 +205,10 @@ class ShowInventory(ShowInventorySchema):
         # Switch 1 FRU Uplink Module 1
         p1_10 = re.compile(r'^Switch (?P<slot>\d+) FRU Uplink Module (?P<subslot>\d+)$')
 
+        # Switch 2  Disk0 SATA
+        # Switch N <any other item>
+        p1_11 = re.compile(r"^Switch +(?P<switch>\d+) +")
+
         # PID: ASR-920-24SZ-IM   , VID: V01  , SN: CAT1902V19M
         # PID: SFP-10G-LR        , VID: CSCO , SN: CD180456291
         # PID: A900-IMA3G-IMSG   , VID: V01  , SN: FOC2204PAP1
@@ -275,7 +279,14 @@ class ShowInventory(ShowInventorySchema):
 
                     # Create slot_dict
                     slot_dict = ret_dict.setdefault("slot", {}).setdefault(slot, {})
-
+                else:
+                    # If no slot was determined from Power Supply pattern but name starts with "Switch N", extract it
+                    # This handles items like "Switch 2  Disk0 SATA"
+                    m1_11 = p1_11.match(name)
+                    if m1_11:
+                        slot = m1_11.groupdict()["switch"]
+                        # Create slot_dict
+                        slot_dict = ret_dict.setdefault("slot", {}).setdefault(slot, {})
                 m = (
                     # SPA subslot 0/0
                     # IM subslot 0/1

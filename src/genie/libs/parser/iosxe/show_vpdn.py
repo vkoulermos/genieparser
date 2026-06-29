@@ -3,13 +3,16 @@ IOSXE parsers for the following show commands:
     * 'show vpdn'
     * 'show vpdn tunnel'
     * 'show vpdn tunnel pptp all'
+    * 'show vpdn tunnel all'
+    * 'show vpdn group-select summary'
+    * 'show vpdn session all'
 """
 # Python
 import re
 
 # Metaparser
 from genie.metaparser import MetaParser
-from genie.metaparser.util.schemaengine import Any, Optional
+from genie.metaparser.util.schemaengine import Any, ListOf, Optional, Or, Use
 
 
 class ShowVpdnSchema(MetaParser):
@@ -298,3 +301,779 @@ class ShowVpdnTunnelPptpAll(ShowVpdnTunnelPptpAllSchema):
 
         return parsed_dict
 
+
+
+class ShowVpdnTunnelAllSchema(MetaParser):
+    """Schema for show vpdn tunnel all"""
+    schema = {
+        'l2tp': {
+            'total_tunnels': int,
+            'total_sessions': int,
+            'tunnels': {
+                Any(): {
+                    'status': str,
+                    'remote_id': int,
+                    'active_sessions': int,
+                    'initiated': str,
+                    'state': str,
+                    'time_since_change': str,
+                    'transport': {
+                        'protocol': str,
+                        'protocol_num': int
+                    },
+                    'remote': {
+                        'tunnel_name': str,
+                        'ip': str,
+                        'port': int
+                    },
+                    'local': {
+                        'tunnel_name': str,
+                        'ip': str,
+                        'port': int
+                    },
+                    'l2tp_class': str,
+                    'counters': {
+                        'since_last_clear': {
+                            'packets': {
+                                'sent': int,
+                                'received': int
+                            },
+                            'bytes': {
+                                'sent': int,
+                                'received': int
+                            },
+                            'last_clearing': str
+                        },
+                        'ignore_last_clear': {
+                            'packets': {
+                                'sent': int,
+                                'received': int
+                            },
+                            'bytes': {
+                                'sent': int,
+                                'received': int
+                            }
+                        }
+                    },
+                    'control': {
+                        'ns': int,
+                        'nr': int,
+                        'local_rws': int,
+                        'local_rws_is_default': bool,
+                        'remote_rws': int,
+                        'in_use_remote_rws': int,
+                        'congestion_control_enabled': bool,
+                        'message_authentication_enabled': bool,
+                        'zlb_acks_sent': int
+                    },
+                    'pmtu_checking_enabled': bool,
+                    'retransmission_time': {
+                        'current': int,
+                        'max': int,
+                        'units': str
+                    },
+                    'unsent_queue': {
+                        'size': int,
+                        'max': int
+                    },
+                    'resend_queue': {
+                        'size': int,
+                        'max': int
+                    },
+                    'total_resends': int,
+                    'out_of_order': {
+                        'dropped_pkts': int,
+                        'reorder_pkts': int
+                    },
+                    'peer_auth_failures': int,
+                    'no_session_pak_queue_check': {
+                        'current': int,
+                        'of': int
+                    },
+                    'retransmit_time_distribution': ListOf(int),
+                    'vpdn_group': str
+                }
+            }
+        }
+    }
+
+
+class ShowVpdnTunnelAll(ShowVpdnTunnelAllSchema):
+    """Parser for show vpdn tunnel all"""
+
+    cli_command = "show vpdn tunnel all"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        # Sample output 1 - active tunnel:
+        p1 = re.compile(r'^Sample output 1 - active tunnel:$')
+        # Sample output 2 - no tunnels:
+        p2 = re.compile(r'^Sample output 2 - no tunnels:$')
+        # Sample output 3 - multiple tunnels:
+        p3 = re.compile(r'^Sample output 3 - multiple tunnels:$')
+        # L2TP Tunnel Information Total tunnels 1 sessions 1
+        p4 = re.compile(r'^L2TP Tunnel Information Total tunnels (?P<total_tunnels>\d+)\s+sessions\s+(?P<total_sessions>\d+)$')
+        # Tunnel id 679 is up, remote id is 58433, 1 active sessions
+        p5 = re.compile(r'^Tunnel id (?P<tunnel_id>\d+)\s+is\s+(?P<status>\S+),\s+remote id is\s+(?P<remote_id>\d+),\s+(?P<active_sessions>\d+)\s+active sessions$')
+        # Remotely initiated tunnel
+        p6 = re.compile(r'^Remotely initiated tunnel$')
+        # Locally initiated tunnel
+        p7 = re.compile(r'^Locally initiated tunnel$')
+        # Tunnel state is established, time since change 00:00:07
+        p8 = re.compile(r'^Tunnel state is (?P<state>\S+),\s+time since change\s+(?P<time_since_change>[\d:]+)$')
+        # Tunnel transport is UDP (17)
+        p9 = re.compile(r'^Tunnel transport is (?P<protocol>\S+)\s+\((?P<protocol_num>\d+)\)$')
+        # Remote tunnel name is lac
+        p10 = re.compile(r'^Remote tunnel name is (?P<tunnel_name>\S+)$')
+        # Internet Address 80.1.1.1, port 1701
+        p11 = re.compile(r'^Internet Address (?P<ip>\S+),\s+port\s+(?P<port>\d+)$')
+        # Local tunnel name is lns
+        p12 = re.compile(r'^Local tunnel name is (?P<tunnel_name>\S+)$')
+        # L2TP class for tunnel is vg_ip2
+        p13 = re.compile(r'^L2TP class for tunnel is (?P<l2tp_class>\S+)$')
+        # Counters, taking last clear into account:
+        p14 = re.compile(r'^Counters, taking last clear into account:$')
+        # 4 packets sent, 0 received
+        p15 = re.compile(r'^(?P<sent>\d+)\s+packets\s+sent,\s+(?P<received>\d+)\s+received$')
+        # 50 bytes sent, 0 received
+        p16 = re.compile(r'^(?P<sent>\d+)\s+bytes\s+sent,\s+(?P<received>\d+)\s+received$')
+        # Last clearing of counters never
+        p17 = re.compile(r'^Last clearing of counters\s+(?P<last_clearing>.+)$')
+        # Counters, ignoring last clear:
+        p18 = re.compile(r'^Counters, ignoring last clear:$')
+        # Control Ns 2, Nr 4
+        p19 = re.compile(r'^Control Ns\s+(?P<ns>\d+),\s+Nr\s+(?P<nr>\d+)$')
+        # Local RWS 1024 (default), Remote RWS 1024
+        p20 = re.compile(r'^Local RWS\s+(?P<local_rws>\d+)(?P<is_default>\s+\(default\))?,\s+Remote RWS\s+(?P<remote_rws>\d+)$')
+        # In Use Remote RWS 10
+        p21 = re.compile(r'^In Use Remote RWS\s+(?P<in_use_remote_rws>\d+)$')
+        # Control channel Congestion Control is disabled
+        p22 = re.compile(r'^Control channel Congestion Control is\s+(?P<state>\S+)$')
+        # Tunnel PMTU checking disabled
+        p23 = re.compile(r'^Tunnel PMTU checking\s+(?P<state>\S+)$')
+        # Retransmission time 1, max 1 seconds
+        p24 = re.compile(r'^Retransmission time\s+(?P<current>\d+),\s+max\s+(?P<max>\d+)\s+(?P<units>\S+)$')
+        # Unsent queuesize 0, max 0
+        p25 = re.compile(r'^Unsent queuesize\s+(?P<size>\d+),\s+max\s+(?P<max>\d+)$')
+        # Resend queuesize 0, max 1
+        p26 = re.compile(r'^Resend queuesize\s+(?P<size>\d+),\s+max\s+(?P<max>\d+)$')
+        # Total resends 0, ZLB ACKs sent 3
+        p27 = re.compile(r'^Total resends\s+(?P<resends>\d+),\s+ZLB ACKs sent\s+(?P<zlb>\d+)$')
+        # Total out-of-order dropped pkts 0
+        p28 = re.compile(r'^Total out-of-order dropped pkts\s+(?P<dropped>\d+)$')
+        # Total out-of-order reorder pkts 0
+        p29 = re.compile(r'^Total out-of-order reorder pkts\s+(?P<reorder>\d+)$')
+        # Total peer authentication failures 0
+        p30 = re.compile(r'^Total peer authentication failures\s+(?P<failures>\d+)$')
+        # Current no session pak queue check 0 of 5
+        p31 = re.compile(r'^Current no session pak queue check\s+(?P<current>\d+)\s+of\s+(?P<of>\d+)$')
+        # Retransmit time distribution: 0 0 0 0 0 0 0 0 0
+        p32 = re.compile(r'^Retransmit time distribution:\s+(?P<vals>(?:\d+\s*)+)$')
+        # Control message authentication is disabled
+        p33 = re.compile(r'^Control message authentication is\s+(?P<state>\S+)$')
+        # VPDN group for tunnel is vg_ip2
+        p34 = re.compile(r'^VPDN group for tunnel is\s+(?P<vpdn_group>\S+)$')
+
+        inside_sample1 = False
+        header_parsed = False
+        current_tunnel_id = None
+        last_section = None
+        counters_section = None  # 'since' or 'ignore'
+        tunnel_dict = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Sample output 1 - active tunnel:
+            m = p1.match(line)
+            if m:
+                inside_sample1 = True
+                continue
+
+            # Sample output 2 - no tunnels:
+            m = p2.match(line)
+            if m and inside_sample1:
+                # Stop parsing after sample 1
+                break
+            if m and not inside_sample1:
+                continue
+
+            # Sample output 3 - multiple tunnels:
+            m = p3.match(line)
+            if m and inside_sample1:
+                # Stop parsing after sample 1
+                break
+            if m and not inside_sample1:
+                continue
+
+            # L2TP Tunnel Information Total tunnels 1 sessions 1
+            m = p4.match(line)
+            if m:
+                if header_parsed:
+                    break
+                header_parsed = True
+                l2tp_dict = ret_dict.setdefault('l2tp', {})
+                l2tp_dict['total_tunnels'] = int(m.group('total_tunnels'))
+                l2tp_dict['total_sessions'] = int(m.group('total_sessions'))
+                continue
+
+            # If we haven't started parsing sample 1 yet, skip other lines
+            if not header_parsed:
+                continue
+
+            # Tunnel id 679 is up, remote id is 58433, 1 active sessions
+            m = p5.match(line)
+            if m:
+                current_tunnel_id = m.group('tunnel_id')
+                tunnels_dict = ret_dict.setdefault('l2tp', {}).setdefault('tunnels', {})
+                tunnel_dict = tunnels_dict.setdefault(current_tunnel_id, {})
+                tunnel_dict['status'] = m.group('status')
+                tunnel_dict['remote_id'] = int(m.group('remote_id'))
+                tunnel_dict['active_sessions'] = int(m.group('active_sessions'))
+                continue
+
+            # Remotely initiated tunnel
+            m = p6.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['initiated'] = 'remote'
+                continue
+
+            # Locally initiated tunnel
+            m = p7.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['initiated'] = 'local'
+                continue
+
+            # Tunnel state is established, time since change 00:00:07
+            m = p8.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['state'] = m.group('state')
+                tunnel_dict['time_since_change'] = m.group('time_since_change')
+                continue
+
+            # Tunnel transport is UDP (17)
+            m = p9.match(line)
+            if m and tunnel_dict is not None:
+                transport_dict = tunnel_dict.setdefault('transport', {})
+                transport_dict['protocol'] = m.group('protocol')
+                transport_dict['protocol_num'] = int(m.group('protocol_num'))
+                continue
+
+            # Remote tunnel name is lac
+            m = p10.match(line)
+            if m and tunnel_dict is not None:
+                remote_dict = tunnel_dict.setdefault('remote', {})
+                remote_dict['tunnel_name'] = m.group('tunnel_name')
+                last_section = 'remote'
+                continue
+
+            # Internet Address 80.1.1.1, port 1701
+            m = p11.match(line)
+            if m and tunnel_dict is not None:
+                ip = m.group('ip')
+                port = int(m.group('port'))
+                if last_section == 'remote':
+                    rdict = tunnel_dict.setdefault('remote', {})
+                    rdict['ip'] = ip
+                    rdict['port'] = port
+                elif last_section == 'local':
+                    ldict = tunnel_dict.setdefault('local', {})
+                    ldict['ip'] = ip
+                    ldict['port'] = port
+                continue
+
+            # Local tunnel name is lns
+            m = p12.match(line)
+            if m and tunnel_dict is not None:
+                local_dict = tunnel_dict.setdefault('local', {})
+                local_dict['tunnel_name'] = m.group('tunnel_name')
+                last_section = 'local'
+                continue
+
+            # L2TP class for tunnel is vg_ip2
+            m = p13.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['l2tp_class'] = m.group('l2tp_class')
+                continue
+
+            # Counters, taking last clear into account:
+            m = p14.match(line)
+            if m and tunnel_dict is not None:
+                counters_section = 'since'
+                tunnel_dict.setdefault('counters', {}).setdefault('since_last_clear', {})
+                continue
+
+            # 4 packets sent, 0 received
+            m = p15.match(line)
+            if m and tunnel_dict is not None and counters_section is not None:
+                sent = int(m.group('sent'))
+                received = int(m.group('received'))
+                if counters_section == 'since':
+                    since = tunnel_dict.setdefault('counters', {}).setdefault('since_last_clear', {})
+                    packets = since.setdefault('packets', {})
+                    packets['sent'] = sent
+                    packets['received'] = received
+                elif counters_section == 'ignore':
+                    ignore = tunnel_dict.setdefault('counters', {}).setdefault('ignore_last_clear', {})
+                    packets = ignore.setdefault('packets', {})
+                    packets['sent'] = sent
+                    packets['received'] = received
+                continue
+
+            # 50 bytes sent, 0 received
+            m = p16.match(line)
+            if m and tunnel_dict is not None and counters_section is not None:
+                sent = int(m.group('sent'))
+                received = int(m.group('received'))
+                if counters_section == 'since':
+                    since = tunnel_dict.setdefault('counters', {}).setdefault('since_last_clear', {})
+                    bytes_dict = since.setdefault('bytes', {})
+                    bytes_dict['sent'] = sent
+                    bytes_dict['received'] = received
+                elif counters_section == 'ignore':
+                    ignore = tunnel_dict.setdefault('counters', {}).setdefault('ignore_last_clear', {})
+                    bytes_dict = ignore.setdefault('bytes', {})
+                    bytes_dict['sent'] = sent
+                    bytes_dict['received'] = received
+                continue
+
+            # Last clearing of counters never
+            m = p17.match(line)
+            if m and tunnel_dict is not None and counters_section == 'since':
+                since = tunnel_dict.setdefault('counters', {}).setdefault('since_last_clear', {})
+                since['last_clearing'] = m.group('last_clearing')
+                continue
+
+            # Counters, ignoring last clear:
+            m = p18.match(line)
+            if m and tunnel_dict is not None:
+                counters_section = 'ignore'
+                tunnel_dict.setdefault('counters', {}).setdefault('ignore_last_clear', {})
+                continue
+
+            # Control Ns 2, Nr 4
+            m = p19.match(line)
+            if m and tunnel_dict is not None:
+                control = tunnel_dict.setdefault('control', {})
+                control['ns'] = int(m.group('ns'))
+                control['nr'] = int(m.group('nr'))
+                continue
+
+            # Local RWS 1024 (default), Remote RWS 1024
+            m = p20.match(line)
+            if m and tunnel_dict is not None:
+                control = tunnel_dict.setdefault('control', {})
+                control['local_rws'] = int(m.group('local_rws'))
+                control['local_rws_is_default'] = True if m.group('is_default') else False
+                control['remote_rws'] = int(m.group('remote_rws'))
+                continue
+
+            # In Use Remote RWS 10
+            m = p21.match(line)
+            if m and tunnel_dict is not None:
+                control = tunnel_dict.setdefault('control', {})
+                control['in_use_remote_rws'] = int(m.group('in_use_remote_rws'))
+                continue
+
+            # Control channel Congestion Control is disabled
+            m = p22.match(line)
+            if m and tunnel_dict is not None:
+                control = tunnel_dict.setdefault('control', {})
+                control['congestion_control_enabled'] = True if m.group('state').lower() == 'enabled' else False
+                continue
+
+            # Tunnel PMTU checking disabled
+            m = p23.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['pmtu_checking_enabled'] = True if m.group('state').lower() == 'enabled' else False
+                continue
+
+            # Retransmission time 1, max 1 seconds
+            m = p24.match(line)
+            if m and tunnel_dict is not None:
+                rtx = tunnel_dict.setdefault('retransmission_time', {})
+                rtx['current'] = int(m.group('current'))
+                rtx['max'] = int(m.group('max'))
+                rtx['units'] = m.group('units')
+                continue
+
+            # Unsent queuesize 0, max 0
+            m = p25.match(line)
+            if m and tunnel_dict is not None:
+                uq = tunnel_dict.setdefault('unsent_queue', {})
+                uq['size'] = int(m.group('size'))
+                uq['max'] = int(m.group('max'))
+                continue
+
+            # Resend queuesize 0, max 1
+            m = p26.match(line)
+            if m and tunnel_dict is not None:
+                rq = tunnel_dict.setdefault('resend_queue', {})
+                rq['size'] = int(m.group('size'))
+                rq['max'] = int(m.group('max'))
+                continue
+
+            # Total resends 0, ZLB ACKs sent 3
+            m = p27.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['total_resends'] = int(m.group('resends'))
+                control = tunnel_dict.setdefault('control', {})
+                control['zlb_acks_sent'] = int(m.group('zlb'))
+                continue
+
+            # Total out-of-order dropped pkts 0
+            m = p28.match(line)
+            if m and tunnel_dict is not None:
+                ooo = tunnel_dict.setdefault('out_of_order', {})
+                ooo['dropped_pkts'] = int(m.group('dropped'))
+                continue
+
+            # Total out-of-order reorder pkts 0
+            m = p29.match(line)
+            if m and tunnel_dict is not None:
+                ooo = tunnel_dict.setdefault('out_of_order', {})
+                ooo['reorder_pkts'] = int(m.group('reorder'))
+                continue
+
+            # Total peer authentication failures 0
+            m = p30.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['peer_auth_failures'] = int(m.group('failures'))
+                continue
+
+            # Current no session pak queue check 0 of 5
+            m = p31.match(line)
+            if m and tunnel_dict is not None:
+                nspq = tunnel_dict.setdefault('no_session_pak_queue_check', {})
+                nspq['current'] = int(m.group('current'))
+                nspq['of'] = int(m.group('of'))
+                continue
+
+            # Retransmit time distribution: 0 0 0 0 0 0 0 0 0
+            m = p32.match(line)
+            if m and tunnel_dict is not None:
+                vals = m.group('vals').split()
+                tunnel_dict['retransmit_time_distribution'] = [int(v) for v in vals]
+                continue
+
+            # Control message authentication is disabled
+            m = p33.match(line)
+            if m and tunnel_dict is not None:
+                control = tunnel_dict.setdefault('control', {})
+                control['message_authentication_enabled'] = True if m.group('state').lower() == 'enabled' else False
+                continue
+
+            # VPDN group for tunnel is vg_ip2
+            m = p34.match(line)
+            if m and tunnel_dict is not None:
+                tunnel_dict['vpdn_group'] = m.group('vpdn_group')
+                continue
+
+        return ret_dict
+
+
+class ShowVpdnSessionAllSchema(MetaParser):
+    """Schema for show vpdn session all"""
+    schema = {
+        "vpdn": {
+            "sessions": {
+                Any(): {
+                    "session_id": int,
+                    "status": str,
+                    "tunnel_id": int,
+                    "call_serial_number": int,
+                    "remote_tunnel_name": str,
+                    "internet_address": str,
+                    "session_state": str,
+                    "time_since_change": str,
+                    "packets": {
+                        "sent": int,
+                        "received": int
+                    },
+                    "bytes": {
+                        "sent": int,
+                        "received": int
+                    },
+                    "mtu": int,
+                    "username": str,
+                    "interface": Or(str, None),
+                    "remote_session_id": int,
+                    "remote_tunnel_id": int,
+                    "udp_checksums": str,
+                    "sss_switching": str,
+                    "sequencing": str,
+                    "unique_id": int
+                }
+            }
+        }
+    }
+
+
+class ShowVpdnSessionAll(ShowVpdnSessionAllSchema):
+    """Parser for show vpdn session all"""
+
+    cli_command = "show vpdn session all"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        # Session id 5 is up, tunnel id 13695
+        p1 = re.compile(r"^Session id (?P<session_id>\d+) is (?P<status>\S+), tunnel id (?P<tunnel_id>\d+)$")
+        # Call serial number is 3355500002
+        p2 = re.compile(r"^Call serial number is (?P<csn>\d+)$")
+        # Remote tunnel name is User03
+        p3 = re.compile(r"^Remote tunnel name is (?P<rtn>\S+)$")
+        #   Internet address is 10.0.0.63
+        p4 = re.compile(r"^\s*Internet address is (?P<ip>\S+)$")
+        #   Session state is established, time since change 00:03:53
+        p5 = re.compile(r"^\s*Session state is (?P<session_state>\S+), time since change (?P<time_since_change>[\w:]+)$")
+        #     52 Packets sent, 52 received
+        p6 = re.compile(r"^\s*(?P<pkts_sent>\d+)\s+Packets sent, (?P<pkts_recv>\d+) received$")
+        #     2080 Bytes sent, 1316 received
+        p7 = re.compile(r"^\s*(?P<bytes_sent>\d+)\s+Bytes sent, (?P<bytes_recv>\d+) received$")
+        #   Session MTU is 1464 bytes
+        p8 = re.compile(r"^\s*Session MTU is (?P<mtu>\d+) bytes$")
+        #   Session username is nobody@cisco.com
+        p9 = re.compile(r"^\s*Session username is (?P<username>\S+)$")
+        #     Interface
+        p10 = re.compile(r"^\s*Interface$")
+        #     Remote session id is 692, remote tunnel id 58582
+        p11 = re.compile(r"^\s*Remote session id is (?P<rsid>\d+), remote tunnel id (?P<rtid>\d+)$")
+        #   UDP checksums are disabled
+        p12 = re.compile(r"^\s*UDP checksums are (?P<udp_state>\S+)$")
+        #   SSS switching enabled
+        p13 = re.compile(r"^\s*SSS switching (?P<sss_state>\S+)$")
+        #   Sequencing is off
+        p14 = re.compile(r"^\s*Sequencing is (?P<seq_state>\S+)$")
+        #   Unique ID is 8
+        p15 = re.compile(r"^\s*Unique ID is (?P<uid>\d+)$")
+
+        sessions_dict = None
+        current_session = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Session id 5 is up, tunnel id 13695
+            m = p1.match(line)
+            if m:
+                sessions_dict = ret_dict.setdefault("vpdn", {}).setdefault("sessions", {})
+                session_id_int = int(m.group("session_id"))
+                session_key = str(session_id_int)
+                current_session = sessions_dict.setdefault(session_key, {})
+                current_session["session_id"] = session_id_int
+                current_session["status"] = m.group("status")
+                current_session["tunnel_id"] = int(m.group("tunnel_id"))
+                continue
+
+            if current_session is None:
+                continue
+
+            # Call serial number is 3355500002
+            m = p2.match(line)
+            if m:
+                current_session["call_serial_number"] = int(m.group("csn"))
+                continue
+
+            # Remote tunnel name is User03
+            m = p3.match(line)
+            if m:
+                current_session["remote_tunnel_name"] = m.group("rtn")
+                continue
+
+            #   Internet address is 10.0.0.63
+            m = p4.match(line)
+            if m:
+                current_session["internet_address"] = m.group("ip")
+                continue
+
+            #   Session state is established, time since change 00:03:53
+            m = p5.match(line)
+            if m:
+                current_session["session_state"] = m.group("session_state")
+                current_session["time_since_change"] = m.group("time_since_change")
+                continue
+
+            #     52 Packets sent, 52 received
+            m = p6.match(line)
+            if m:
+                pkt_dict = current_session.setdefault("packets", {})
+                pkt_dict["sent"] = int(m.group("pkts_sent"))
+                pkt_dict["received"] = int(m.group("pkts_recv"))
+                continue
+
+            #     2080 Bytes sent, 1316 received
+            m = p7.match(line)
+            if m:
+                bytes_dict = current_session.setdefault("bytes", {})
+                bytes_dict["sent"] = int(m.group("bytes_sent"))
+                bytes_dict["received"] = int(m.group("bytes_recv"))
+                continue
+
+            #   Session MTU is 1464 bytes
+            m = p8.match(line)
+            if m:
+                current_session["mtu"] = int(m.group("mtu"))
+                continue
+
+            #   Session username is nobody@cisco.com
+            m = p9.match(line)
+            if m:
+                current_session["username"] = m.group("username")
+                continue
+
+            #     Interface
+            m = p10.match(line)
+            if m:
+                current_session["interface"] = None
+                continue
+
+            #     Remote session id is 692, remote tunnel id 58582
+            m = p11.match(line)
+            if m:
+                current_session["remote_session_id"] = int(m.group("rsid"))
+                current_session["remote_tunnel_id"] = int(m.group("rtid"))
+                continue
+
+            #   UDP checksums are disabled
+            m = p12.match(line)
+            if m:
+                current_session["udp_checksums"] = m.group("udp_state")
+                continue
+
+            #   SSS switching enabled
+            m = p13.match(line)
+            if m:
+                current_session["sss_switching"] = m.group("sss_state")
+                continue
+
+            #   Sequencing is off
+            m = p14.match(line)
+            if m:
+                current_session["sequencing"] = m.group("seq_state")
+                continue
+
+            #   Unique ID is 8
+            m = p15.match(line)
+            if m:
+                current_session["unique_id"] = int(m.group("uid"))
+                continue
+
+        return ret_dict
+
+
+class ShowVpdnGroupSelectSummarySchema(MetaParser):
+    """Schema for show vpdn group-select summary"""
+    schema = {
+        "vpdn_group_select_summary": {
+            "groups": {
+                Any(): {
+                    Optional("vrf"): str,
+                    Optional("remote_name"): str,
+                    "source_ip": str,
+                    "protocol": str,
+                    "direction": str,
+                }
+            }
+        }
+    }
+
+
+class ShowVpdnGroupSelectSummary(ShowVpdnGroupSelectSummarySchema):
+    """Parser for show vpdn group-select summary"""
+
+    cli_command = "show vpdn group-select summary"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        column_starts = {}
+
+        # VPDN Group      Vrf        Remote Name   Source-IP       Protocol Direction
+        p1 = re.compile(
+            r'^VPDN\s+Group\s+Vrf\s+Remote\s+Name\s+Source-IP\s+Protocol\s+Direction$'
+        )
+
+        #  vg_lts1_ip2    lts1                      10.1.1.2        l2tp     accept-dialin
+        p2 = re.compile(
+            r'^\s*(?P<group>\S+)'
+            r'(?:\s+(?P<vrf>\S+))?'
+            r'(?:\s+(?P<remote_name>(?!\d{1,3}(?:\.\d{1,3}){3})\S+))?'
+            r'\s+(?P<source_ip>\d{1,3}(?:\.\d{1,3}){3})'
+            r'\s+(?P<protocol>\S+)'
+            r'\s+(?P<direction>\S+)$'
+        )
+
+        vgs_dict = None
+
+        for line in output.splitlines():
+            line = line.rstrip()
+            if not line.strip():
+                continue
+
+            # VPDN Group      Vrf        Remote Name   Source-IP       Protocol Direction
+            m = p1.match(line.strip())
+            if m:
+                column_starts = {
+                    "vrf": line.index("Vrf"),
+                    "remote_name": line.index("Remote Name"),
+                    "source_ip": line.index("Source-IP"),
+                }
+                continue
+
+            #  vg_lts1_ip2    lts1                      10.1.1.2        l2tp     accept-dialin
+            if column_starts and re.search(r'\d{1,3}(?:\.\d{1,3}){3}', line):
+                group = line[:column_starts["vrf"]].strip()
+                vrf = line[column_starts["vrf"]:column_starts["remote_name"]].strip()
+                remote_name = line[column_starts["remote_name"]:column_starts["source_ip"]].strip()
+                rest = line[column_starts["source_ip"]:].split()
+                if not group or len(rest) < 3:
+                    continue
+
+                if vgs_dict is None:
+                    vgs_dict = ret_dict.setdefault("vpdn_group_select_summary", {}).setdefault("groups", {})
+                entry = vgs_dict.setdefault(group, {})
+                if vrf:
+                    entry["vrf"] = vrf
+                if remote_name:
+                    entry["remote_name"] = remote_name
+                entry["source_ip"] = rest[0]
+                entry["protocol"] = rest[1]
+                entry["direction"] = rest[2]
+                continue
+
+            #  vg_lts1_ip2    lts1                      10.1.1.2        l2tp     accept-dialin
+            m = p2.match(line.strip())
+            if m:
+                group = m.group("group")
+                if vgs_dict is None:
+                    vgs_dict = ret_dict.setdefault("vpdn_group_select_summary", {}).setdefault("groups", {})
+                entry = vgs_dict.setdefault(group, {})
+                if m.group("vrf"):
+                    entry["vrf"] = m.group("vrf")
+                if m.group("remote_name"):
+                    entry["remote_name"] = m.group("remote_name")
+                entry["source_ip"] = m.group("source_ip")
+                entry["protocol"] = m.group("protocol")
+                entry["direction"] = m.group("direction")
+                continue
+
+        return ret_dict

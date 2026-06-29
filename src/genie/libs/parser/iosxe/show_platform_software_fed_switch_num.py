@@ -737,3 +737,210 @@ class ShowPlatformSoftwareFedSwitchFnfProfileMapsDump(ShowPlatformSoftwareFedSwi
                 continue
 
         return ret_dict
+    
+# ======================================================================
+# Schema for 'show platform software fed switch {switch} fnf flow-table mon-id {mon_id} asic {asic} start-index {start_index} num-flows {num_flows}'
+# ======================================================================
+
+class ShowPlatformSoftwareFedSwitchFnfFlowTableMonIdSchema(MetaParser):
+    """Schema for:
+        * show platform software fed switch {switch} fnf flow-table
+          mon-id {mon_id} asic {asic} start-index {start_index} {num_flows}
+    """
+    schema = {
+        'monitor_id': str,
+        'asic': int,
+        Optional('range'): {
+            'start': int,
+            'end': int,
+            'start_index': int,
+            'num_flows': int,
+        },
+        Optional('no_flow_entries'): bool,
+    }
+
+# ======================================================================
+# Parser for 'show platform software fed switch {switch} fnf flow-table mon-id {mon_id} asic {asic} start-index {start_index} num-flows {num_flows}'
+# ======================================================================
+
+class ShowPlatformSoftwareFedSwitchFnfFlowTableMonId(
+        ShowPlatformSoftwareFedSwitchFnfFlowTableMonIdSchema):
+    """Parser for:
+        * show platform software fed switch {switch} fnf flow-table
+          mon-id {mon_id} asic {asic} start-index {start_index} {num_flows}
+    """
+
+    cli_command = (
+        'show platform software fed switch {switch} fnf flow-table '
+        'mon-id {mon_id} asic {asic} start-index {start_index} num-flows {num_flows}'
+    )
+
+    def cli(self, switch, mon_id, asic, start_index, num_flows, output=None):
+        if output is None:
+            cmd = self.cli_command.format(
+                switch=switch,
+                mon_id=mon_id,
+                asic=asic,
+                start_index=start_index,
+                num_flows=num_flows,
+            )
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+
+        # Internal Flow Monitors for AVC - Monitor ID: 5764607523034234881, ASIC: 1
+        p1 = re.compile(
+            r'Internal\s+Flow\s+Monitors\s+for\s+AVC\s+-\s+Monitor\s+ID:\s+'
+            r'(?P<monitor_id>\d+),\s+ASIC:\s+(?P<asic>\d+)'
+        )
+
+        # Range: 0 to 10 (start_index: 0, num_flows: 10)
+        p2 = re.compile(
+            r'Range:\s+(?P<start>\d+)\s+to\s+(?P<end>\d+)\s+'
+            r'\(start_index:\s+(?P<start_index>\d+),\s+num_flows:\s+(?P<num_flows>\d+)\)'
+        )
+
+        # No flow entries found for ASIC 1
+        p3 = re.compile(
+            r'No\s+(?:flow\s+entries|internal\s+flow\s+monitors)\s+found\s+for\s+ASIC\s+\d+'
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Internal Flow Monitors for AVC - Monitor ID: 5764607523034234881, ASIC: 1
+            m = p1.match(line)
+            if m:
+                ret_dict['monitor_id'] = m.group('monitor_id')
+                ret_dict['asic'] = int(m.group('asic'))
+                continue
+
+            # Range: 0 to 10 (start_index: 0, num_flows: 10)
+            m = p2.match(line)
+            if m:
+                ret_dict.setdefault('range', {})
+                ret_dict['range']['start'] = int(m.group('start'))
+                ret_dict['range']['end'] = int(m.group('end'))
+                ret_dict['range']['start_index'] = int(m.group('start_index'))
+                ret_dict['range']['num_flows'] = int(m.group('num_flows'))
+                continue
+
+            # No flow entries found for ASIC 1
+            m = p3.match(line)
+            if m:
+                ret_dict['no_flow_entries'] = True
+                continue
+
+        return ret_dict 
+
+class ShowPlatformSoftwareFedSwitchActiveFnfAttachPointsDumpSchema(MetaParser):
+    """Schema for show platform software fed switch active fnf attach-points-dump"""
+
+    schema = {
+        'attach_points': {
+            Any(): {
+                'sampler_type': int,
+                'sampler_window_size': int,
+                'fnf_mon_id': int,
+                'direction': str,
+                'interface_id': str,
+                'traffic_type': str,
+                'status': str,
+                Optional('asic'): int,
+                Optional('fp_oid'): int,
+                Optional('acl_oid'): int,
+                Optional('rh_oid'): int,
+            }
+        }
+    }
+
+class ShowPlatformSoftwareFedSwitchActiveFnfAttachPointsDump(
+    ShowPlatformSoftwareFedSwitchActiveFnfAttachPointsDumpSchema
+):
+    """Parser for show platform software fed switch active fnf attach-points-dump"""
+
+    cli_command = [
+        'show platform software fed {switch} {switch_type} fnf attach-points-dump',
+        'show platform software fed {switch_type} fnf attach-points-dump',
+    ]
+
+    def cli(self, switch_type=None, switch=None, output=None):
+        if output is None:
+            if switch:
+                output = self.device.execute(
+                    self.cli_command[0].format(switch=switch, switch_type=switch_type)
+                )
+            else:
+                output = self.device.execute(
+                    self.cli_command[1].format(switch_type=switch_type)
+                )
+
+        ret_dict = {}
+        idx = 0
+        current_entry = None
+
+        # | 0 | 0 | 3208064872 | Input | Gi2/0/6 | IPV4 TRAFFIC | SUCCESS |
+        p1 = re.compile(
+            r'^\|\s*(?P<sampler_type>\d+)\s*\|\s*(?P<sampler_window_size>\d+)\s*\|'
+            r'\s*(?P<fnf_mon_id>\d+)\s*\|\s*(?P<direction>\S+)\s*\|'
+            r'\s*(?P<interface_id>\S+)\s*\|\s*(?P<traffic_type>IPV[46]\s+TRAFFIC)\s*\|'
+            r'\s*(?P<status>\S+)\s*\|$'
+        )
+
+        # Asic:    0
+        p2 = re.compile(r'^Asic:\s+(?P<asic>\d+)$')
+
+        # fp_oid:  0
+        p3 = re.compile(r'^fp_oid:\s+(?P<fp_oid>\d+)$')
+
+        # acl_oid: 0
+        p4 = re.compile(r'^acl_oid:\s+(?P<acl_oid>\d+)$')
+
+        # rh_oid:  0
+        p5 = re.compile(r'^rh_oid:\s+(?P<rh_oid>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+           
+            # | 0 | 0 | 3208064872 | Input | Gi2/0/6 | IPV4 TRAFFIC | SUCCESS |
+            m = p1.match(line)
+            if m:
+                idx += 1
+                g = m.groupdict()
+                current_entry = ret_dict.setdefault('attach_points', {}).setdefault(idx, {})
+                current_entry['sampler_type'] = int(g['sampler_type'])
+                current_entry['sampler_window_size'] = int(g['sampler_window_size'])
+                current_entry['fnf_mon_id'] = int(g['fnf_mon_id'])
+                current_entry['direction'] = g['direction']
+                current_entry['interface_id'] = g['interface_id']
+                current_entry['traffic_type'] = g['traffic_type'].strip()
+                current_entry['status'] = g['status']
+                continue
+               
+            # Asic:    0
+            m = p2.match(line)
+            if m and current_entry is not None:
+                current_entry['asic'] = int(m.group('asic'))
+                continue
+
+           # fp_oid:  0
+            m = p3.match(line)
+            if m and current_entry is not None:
+                current_entry['fp_oid'] = int(m.group('fp_oid'))
+                continue
+
+            # acl_oid: 0
+            m = p4.match(line)
+            if m and current_entry is not None:
+                current_entry['acl_oid'] = int(m.group('acl_oid'))
+                continue
+
+            # rh_oid:  0
+            m = p5.match(line)
+            if m and current_entry is not None:
+                current_entry['rh_oid'] = int(m.group('rh_oid'))
+                continue
+
+        return ret_dict 

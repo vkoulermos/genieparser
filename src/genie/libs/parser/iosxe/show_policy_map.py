@@ -15,6 +15,7 @@ IOSXE parsers for the following show commands:
     * 'show policy-map type queueing interface {interface} output class {class_name}',
     * 'show policy-map type queueing interface {interface} output',
     * 'show policy-map multipoint',
+    * 'show policy-map session out',
 '''
 
 # Python
@@ -25,7 +26,7 @@ from netaddr import IPAddress, IPNetwork
 
 # Metaparser
 from genie.metaparser import MetaParser
-from genie.metaparser.util.schemaengine import Schema, Any, Or, Optional, And, Default, Use
+from genie.metaparser.util.schemaengine import Schema, Any, Or, Optional, And, Default, Use, ListOf
 
 # import parser utils
 from genie.libs.parser.utils.common import Common
@@ -67,7 +68,17 @@ class ShowPolicyMapTypeSchema(MetaParser):
                             Optional('class_map'): {
                                 Any(): {
                                     'match_evaluation': str,
-                                    'match': list,
+                                    'match': ListOf(str),
+                                    Optional('match_stats'): {
+                                        Any(): {
+                                            Optional('packets'): int,
+                                            Optional('bytes'): int,
+                                            Optional('rate'): {
+                                                'interval': int,
+                                                'offered_rate_bps': int
+                                            }
+                                        }
+                                    },
                                     Optional('packets'): int,
                                     Optional('packet_output'): int,
                                     Optional('packet_drop'): int,
@@ -217,7 +228,17 @@ class ShowPolicyMapTypeSchema(MetaParser):
                                             Optional('class_map'): {
                                                 Any():{
                                                     'match_evaluation': str,
-                                                    'match': list,
+                                                    Optional('match'): ListOf(str),
+                                                    Optional('match_stats'): {
+                                                        Any(): {
+                                                            Optional('packets'): int,
+                                                            Optional('bytes'): int,
+                                                            Optional('rate'): {
+                                                                'interval': int,
+                                                                'offered_rate_bps': int
+                                                            }
+                                                        }
+                                                    },
                                                     Optional('packets'): int,
                                                     Optional('packet_output'): int,
                                                     Optional('packet_drop'): int,
@@ -367,7 +388,17 @@ class ShowPolicyMapTypeSchema(MetaParser):
                                                             Optional('class_map'): {
                                                                 Any():{
                                                                     'match_evaluation': str,
-                                                                    'match': list,
+                                                                    Optional('match'): ListOf(str),
+                                                                    Optional('match_stats'): {
+                                                                        Any(): {
+                                                                            Optional('packets'): int,
+                                                                            Optional('bytes'): int,
+                                                                            Optional('rate'): {
+                                                                                'interval': int,
+                                                                                'offered_rate_bps': int
+                                                                            }
+                                                                        }
+                                                                    },
                                                                     Optional('packets'): int,
                                                                     Optional('packet_output'): int,
                                                                     Optional('packet_drop'): int,
@@ -920,6 +951,10 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
 
         # -1 depth since the top policy-map is a child element, but has depth 0
         dict_stack = [(-1, ret_dict)]
+        
+        # Initialize match tracking variables
+        current_match = None
+        current_match_indent = None
 
         for line in out.splitlines():
 
@@ -1012,7 +1047,10 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
                 queue_stats = 0
                 class_map = m.groupdict()['class_map']
                 class_match = m.groupdict()['match_all'].replace('(', '').replace(')', '')
-
+                
+                # Clear match tracking when entering new class-map
+                current_match = None
+                current_match_indent = None
 
                 while dict_stack[-1][0] >= len_white:
                     dict_stack.pop()
@@ -1051,11 +1089,19 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
             # 8 packets, 800 bytes
             m = p4.match(line)
             if m:
-
-                pkts = m.groupdict()['packets']
-                byte = m.groupdict()['bytes']
-                class_dict.setdefault('packets', int(pkts))
-                class_dict.setdefault('bytes', int(byte))
+                # Check if we're in match statistics context (more indented than match line)
+                if current_match is not None and current_match_indent is not None and len_white > current_match_indent:
+                    # This is match-level statistics
+                    match_stats_dict = class_dict.setdefault('match_stats', {})
+                    match_stat = match_stats_dict.setdefault(current_match, {})
+                    match_stat['packets'] = int(m.groupdict()['packets'])
+                    match_stat['bytes'] = int(m.groupdict()['bytes'])
+                else:
+                    # This is class-level statistics
+                    pkts = m.groupdict()['packets']
+                    byte = m.groupdict()['bytes']
+                    class_dict.setdefault('packets', int(pkts))
+                    class_dict.setdefault('bytes', int(byte))
                 continue
 
             # 8 packets
@@ -1081,9 +1127,17 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
             # 5 minute offered rate 0000 bps
             m = p5_1.match(line)
             if m:
-
-                rate_dict = class_dict.setdefault('rate', {})
-                dict_stack.append((len_white, rate_dict,))
+                # Check if we're in match statistics context (more indented than match line)
+                if current_match is not None and current_match_indent is not None and len_white > current_match_indent:
+                    # This is match-level statistics (5 minute rate)
+                    match_stats_dict = class_dict.setdefault('match_stats', {})
+                    match_stat = match_stats_dict.setdefault(current_match, {})
+                    rate_dict = match_stat.setdefault('rate', {})
+                else:
+                    # This is class-level statistics
+                    rate_dict = class_dict.setdefault('rate', {})
+                    dict_stack.append((len_white, rate_dict,))
+                    
                 rate_dict['interval'] = int(m.groupdict()['interval']) * 60
                 rate_dict['offered_rate_bps'] = int(m.groupdict()['offered_rate'])
                 continue
@@ -1109,8 +1163,15 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
                 while dict_stack[-1][0] >= len_white:
                     dict_stack.pop()
 
-                match_list.append(m.groupdict()['match'])
-                class_dict.setdefault('match', match_list)
+                match_criteria = m.groupdict()['match']
+
+                # Add to match list
+                match_list = class_dict.setdefault('match', [])
+                match_list.append(match_criteria)
+
+                # Store current match for statistics and its indentation
+                current_match = match_criteria
+                current_match_indent = len_white
                 continue
 
             # police:
@@ -1342,19 +1403,39 @@ class ShowPolicyMapTypeSuperParser(ShowPolicyMapTypeSchema):
             # Marker statistics: Disabled
             m = p14_2.match(line)
             if m:
-                qos_dict_map['marker_statistics'] = m.groupdict()['marker_statistics']
+                try:
+                    qos_dict_map['marker_statistics'] = m.groupdict()['marker_statistics']
+                except (NameError, UnboundLocalError):
+                    # If qos_dict_map doesn't exist and we have mpls_exp_value, create the structure
+                    try:
+                        if 'mpls_exp_value' in locals() and mpls_exp_value:
+                            qos_dict_map = qos_dict.setdefault('mpls experimental imposition ' + mpls_exp_value, {}).setdefault('stats', {})
+                            qos_dict_map['marker_statistics'] = m.groupdict()['marker_statistics']
+                    except:
+                        pass
                 continue
 
             # Packets marked 500
             m = p14_3.match(line)
             if m:
-                qos_dict_map['packets_marked'] = int(m.groupdict()['packets_marked'])
+                try:
+                    qos_dict_map['packets_marked'] = int(m.groupdict()['packets_marked'])
+                except (NameError, UnboundLocalError):
+                    # If qos_dict_map doesn't exist and we have mpls_exp_value, create the structure
+                    try:
+                        if 'mpls_exp_value' in locals() and mpls_exp_value:
+                            qos_dict_map = qos_dict.setdefault('mpls experimental imposition ' + mpls_exp_value, {}).setdefault('stats', {})
+                            qos_dict_map['packets_marked'] = int(m.groupdict()['packets_marked'])
+                    except:
+                        pass
                 continue
 
             # mpls experimental imposition 1
             m = p14_4.match(line)
             if m:
-                qos_dict['mpls_experimental_imposition'] = int(m.groupdict()['value'])
+                mpls_exp_value = m.groupdict()['value']
+                qos_dict['mpls_experimental_imposition'] = int(mpls_exp_value)
+                # Don't create qos_dict_map here - only create it if there's actual data (p14_2/p14_3)
                 continue
 
             # drop
@@ -2271,7 +2352,10 @@ class ShowPolicyMapControlPlaneClassMap(ShowPolicyMapControlPlaneClassMapSchema)
             # Marker statistics: Disabled
             m = p11_2.match(line)
             if m:
-                qos_dict_map['marker_statistics'] = m.groupdict()['marker_statistics']
+                try:
+                    qos_dict_map['marker_statistics'] = m.groupdict()['marker_statistics']
+                except (NameError, UnboundLocalError):
+                    pass
                 continue
 
             # drop
@@ -3941,4 +4025,856 @@ class ShowPolicyMapMultipoint(ShowPolicyMapMultipointSchema):
                 continue
         if ret_dict:
             ret_dict = {'interfaces': ret_dict}
+        return ret_dict
+
+class ShowPolicyMapTypeAccessControlInterfaceInterfaceInputSchema(MetaParser):
+    schema = {
+        "interface": {
+            Any(): {
+                "service_policy": {
+                    "input": {
+                        "name": str,
+                        "type": str,
+                        "classes": {
+                            Any(): {
+                                "match_type": str,
+                                "packets": int,
+                                "bytes": int,
+                                "offered_rate_bps_5min": int,
+                                Optional("drop_rate_bps_5min"): int,
+                                "matches": ListOf(str),
+                                Optional("action"): str,
+                                Optional("child_policy"): {
+                                    "name": str,
+                                    "type": str,
+                                    "classes": {
+                                        Any(): {
+                                            "match_type": str,
+                                            "packets": int,
+                                            "bytes": int,
+                                            "offered_rate_bps_5min": int,
+                                            Optional("drop_rate_bps_5min"): int,
+                                            "matches": ListOf(str),
+                                            Optional("action"): str,
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowPolicyMapTypeAccessControlInterfaceInterfaceInput(ShowPolicyMapTypeAccessControlInterfaceInterfaceInputSchema):
+    cli_command = "show policy-map type access-control interface {interface} input"
+
+    def cli(self, interface=None, output=None):
+        if output is None:
+            cmd = self.cli_command.format(interface=interface)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        # Initialize intf_dict as None, will be set when interface name is parsed
+        intf_dict = None
+        actual_interface = interface
+
+        # GigabitEthernet0/0/0 - Interface names typically have numbers and/or special chars
+        p1 = re.compile(r"^\s*(?P<ifname>[A-Z][a-zA-Z]+[\d/:.-]+)\s*$")
+
+        # Service-policy access-control input: parent
+        p2 = re.compile(r"^\s*Service-policy\s+(?P<name>\S+)\s+input\s*:\s*(?P<type>\S+)\s*$")
+
+        #   Service-policy access-control : child
+        p3 = re.compile(r"^\s*Service-policy\s+(?P<name>\S+)\s*:\s*(?P<type>\S+)\s*$")
+
+        # Class-map: ip_tcp (match-all)
+        p4 = re.compile(r"^\s*Class-map:\s+(?P<class_name>\S+)\s+\((?P<match_type>match-\w+)\)\s*$")
+
+        #   584692 packets, 49114128 bytes
+        p5 = re.compile(r"^\s*(?P<packets>\d+)\s+packets\s*,\s*(?P<bytes>\d+)\s+bytes\s*$")
+
+        #   5 minute offered rate 1139000 bps
+        p6 = re.compile(r"^\s*5\s+minute\s+offered\s+rate\s+(?P<offered>\d+)\s+bps(?:\s*,\s*drop\s+rate\s+(?P<drop>\d+)\s+bps)?\s*$")
+
+        #   Match: field IP version eq 4
+        p7 = re.compile(r"^\s*Match\s*:\s*(?P<match>.*\S)\s*$")
+
+        #   drop
+        #   log
+        p8 = re.compile(r"^\s*(?P<action>drop|log)\s*$")
+
+        service_policy_input_dict = None
+        parent_classes_dict = None
+        current_class_dict = None
+
+        # Child policy tracking
+        inside_child = False
+        child_classes_dict = None
+
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip()
+            if not line.strip():
+                continue
+
+            # GigabitEthernet0/0/0
+            m = p1.match(line)
+            if m:
+                # Extract interface name from output and set up intf_dict
+                actual_interface = m.groupdict()["ifname"]
+                intf_dict = ret_dict.setdefault("interface", {}).setdefault(actual_interface, {})
+                continue
+
+            # Service-policy access-control input: parent
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                sp_dict = intf_dict.setdefault("service_policy", {})
+                service_policy_input_dict = sp_dict.setdefault("input", {})
+                service_policy_input_dict["name"] = group["name"]
+                service_policy_input_dict["type"] = group["type"]
+                parent_classes_dict = service_policy_input_dict.setdefault("classes", {})
+                # Reset child tracking when we see a new service-policy input
+                inside_child = False
+                child_classes_dict = None
+                continue
+
+            #   Service-policy access-control : child
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                if current_class_dict is not None:
+                    cp_dict = current_class_dict.setdefault("child_policy", {})
+                    cp_dict["name"] = group["name"]
+                    cp_dict["type"] = group["type"]
+                    child_classes_dict = cp_dict.setdefault("classes", {})
+                    inside_child = True
+                continue
+
+            # Class-map: ip_tcp (match-all)
+            m = p4.match(line)
+            if m:
+                # Check if this line starts without indentation - if so, we've exited child mode
+                starts_without_space = bool(re.match(r"^\S", raw_line))
+                if inside_child and starts_without_space:
+                    inside_child = False
+                    child_classes_dict = None
+
+                group = m.groupdict()
+                class_name = group["class_name"]
+                match_type = group["match_type"]
+
+                if inside_child and child_classes_dict is not None:
+                    target_classes = child_classes_dict
+                elif parent_classes_dict is not None:
+                    target_classes = parent_classes_dict
+                else:
+                    # Skip if we don't have a valid target
+                    continue
+
+                current_class_dict = target_classes.setdefault(class_name, {})
+                current_class_dict["match_type"] = match_type
+
+                continue
+
+            #   584692 packets, 49114128 bytes
+            m = p5.match(line)
+            if m and current_class_dict is not None:
+                group = m.groupdict()
+                current_class_dict["packets"] = int(group["packets"])
+                current_class_dict["bytes"] = int(group["bytes"])
+                continue
+
+            #   5 minute offered rate 1139000 bps
+            m = p6.match(line)
+            if m and current_class_dict is not None:
+                group = m.groupdict()
+                current_class_dict["offered_rate_bps_5min"] = int(group["offered"])
+                if group.get("drop"):
+                    current_class_dict["drop_rate_bps_5min"] = int(group["drop"])
+                continue
+
+            #   Match: field IP version eq 4
+            m = p7.match(line)
+            if m and current_class_dict is not None:
+                match_list = current_class_dict.setdefault("matches", [])
+                match_list.append(m.groupdict()["match"])
+                continue
+
+            #   drop
+            m = p8.match(line)
+            if m and current_class_dict is not None:
+                current_class_dict["action"] = m.groupdict()["action"]
+                continue
+
+        return ret_dict
+
+class ShowPolicyMapTypeAccessControlInterfaceInterfaceOutSchema(MetaParser):
+    schema = {
+        "interface": {
+            Any(): {
+                "service_policy": {
+                    "output": {
+                        "name": str,
+                        "type": str,
+                        "classes": {
+                            Any(): {
+                                "match_type": str,
+                                "packets": int,
+                                "bytes": int,
+                                "offered_rate_bps_5min": int,
+                                Optional("drop_rate_bps_5min"): int,
+                                "matches": ListOf(str),
+                                Optional("action"): str,
+                                Optional("child_policy"): {
+                                    "name": str,
+                                    "type": str,
+                                    "classes": {
+                                        Any(): {
+                                            "match_type": str,
+                                            "packets": int,
+                                            "bytes": int,
+                                            "offered_rate_bps_5min": int,
+                                            Optional("drop_rate_bps_5min"): int,
+                                            "matches": ListOf(str),
+                                            Optional("action"): str,
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+class ShowPolicyMapTypeAccessControlInterfaceInterfaceOut(ShowPolicyMapTypeAccessControlInterfaceInterfaceOutSchema):
+    cli_command = "show policy-map type access-control interface {interface} output"
+
+    def cli(self, interface=None, output=None):
+        if output is None:
+            cmd = self.cli_command.format(interface=interface)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        # Initialize intf_dict as None, will be set when interface name is parsed
+        intf_dict = None
+        actual_interface = interface
+
+        # Interface names typically have numbers and/or special chars
+        # GigabitEthernet0/0/0
+        p1 = re.compile(r"^\s*(?P<ifname>[A-Z][a-zA-Z]+[\d/:.-]+)\s*$")
+
+        # Service-policy access-control output: parent
+        p2 = re.compile(r"^\s*Service-policy\s+(?P<name>\S+)\s+output\s*:\s*(?P<type>\S+)\s*$")
+
+        #   Service-policy access-control : child
+        p3 = re.compile(r"^\s*Service-policy\s+(?P<name>\S+)\s*:\s*(?P<type>\S+)\s*$")
+
+        # Class-map: ip_tcp (match-all)
+        p4 = re.compile(r"^\s*Class-map:\s+(?P<class_name>\S+)\s+\((?P<match_type>match-\w+)\)\s*$")
+
+        #   584692 packets, 49114128 bytes
+        p5 = re.compile(r"^\s*(?P<packets>\d+)\s+packets\s*,\s*(?P<bytes>\d+)\s+bytes\s*$")
+
+        #   5 minute offered rate 1139000 bps
+        p6 = re.compile(r"^\s*5\s+minute\s+offered\s+rate\s+(?P<offered>\d+)\s+bps(?:\s*,\s*drop\s+rate\s+(?P<drop>\d+)\s+bps)?\s*$")
+
+        #   Match: field IP version eq 4
+        p7 = re.compile(r"^\s*Match\s*:\s*(?P<match>.*\S)\s*$")
+
+        #   drop
+        p8 = re.compile(r"^\s*(?P<action>drop)\s*$")
+
+        service_policy_output_dict = None
+        parent_classes_dict = None
+        current_class_dict = None
+        current_parent_class_name = None
+
+        # Child policy tracking
+        inside_child = False
+        child_classes_dict = None
+
+        for raw_line in output.splitlines():
+            line = raw_line.rstrip()
+            if not line.strip():
+                continue
+
+            # GigabitEthernet0/0/0
+            m = p1.match(line)
+            if m:
+                # Extract interface name from output and set up intf_dict
+                actual_interface = m.groupdict()["ifname"]
+                intf_dict = ret_dict.setdefault("interface", {}).setdefault(actual_interface, {})
+                continue
+
+            # Service-policy access-control output: parent
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                sp_dict = intf_dict.setdefault("service_policy", {})
+                service_policy_output_dict = sp_dict.setdefault("output", {})
+                service_policy_output_dict["name"] = group["name"]
+                service_policy_output_dict["type"] = group["type"]
+                parent_classes_dict = service_policy_output_dict.setdefault("classes", {})
+                continue
+
+            #   Service-policy access-control : child
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                if current_class_dict is not None:
+                    cp_dict = current_class_dict.setdefault("child_policy", {})
+                    cp_dict["name"] = group["name"]
+                    cp_dict["type"] = group["type"]
+                    child_classes_dict = cp_dict.setdefault("classes", {})
+                    inside_child = True
+                continue
+
+            # Class-map: ip_tcp (match-all)
+            m = p4.match(line)
+            if m:
+                # Determine if this is a top-level class by checking indentation
+                # Parent classes have 4 spaces, child classes have 8+ spaces
+                indent = len(raw_line) - len(raw_line.lstrip())
+                if inside_child and indent <= 4:
+                    inside_child = False
+                    child_classes_dict = None
+
+                group = m.groupdict()
+                class_name = group["class_name"]
+                match_type = group["match_type"]
+
+                if inside_child and child_classes_dict is not None:
+                    target_classes = child_classes_dict
+                elif parent_classes_dict is not None:
+                    target_classes = parent_classes_dict
+                else:
+                    # Skip if we don't have a valid target
+                    continue
+
+                current_class_dict = target_classes.setdefault(class_name, {})
+                current_class_dict["match_type"] = match_type
+
+                if not inside_child:
+                    current_parent_class_name = class_name
+                continue
+
+            #   584692 packets, 49114128 bytes
+            m = p5.match(line)
+            if m and current_class_dict is not None:
+                group = m.groupdict()
+                current_class_dict["packets"] = int(group["packets"])
+                current_class_dict["bytes"] = int(group["bytes"])
+                continue
+
+            #   5 minute offered rate 1139000 bps
+            m = p6.match(line)
+            if m and current_class_dict is not None:
+                group = m.groupdict()
+                current_class_dict["offered_rate_bps_5min"] = int(group["offered"])
+                if group.get("drop"):
+                    current_class_dict["drop_rate_bps_5min"] = int(group["drop"])
+                continue
+
+            #   Match: field IP version eq 4
+            m = p7.match(line)
+            if m and current_class_dict is not None:
+                match_list = current_class_dict.setdefault("matches", [])
+                match_list.append(m.groupdict()["match"])
+                continue
+
+            #   drop
+            m = p8.match(line)
+            if m and current_class_dict is not None:
+                current_class_dict["action"] = m.groupdict()["action"]
+                continue
+
+        return ret_dict
+
+
+class ShowPolicyMapTypeAccessControlAccessControlSchema(MetaParser):
+    """Schema for show policy-map type access-control {access-control}"""
+    schema = {
+        'policy_map': {
+            'type': str,
+            'name': str,
+            'class': {
+                Any(): {
+                    'actions': {
+                        Optional('service_policy'): str,
+                        Optional('drop'): bool,
+                        Optional('send_response'): str,
+                        Optional('log'): bool
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowPolicyMapTypeAccessControlAccessControl(ShowPolicyMapTypeAccessControlAccessControlSchema):
+    """Parser for show policy-map type access-control {access-control}"""
+    cli_command = "show policy-map type access-control parent {access_control}"
+
+    def cli(self, access_control="", output=None):
+        if output is None:
+            cmd = self.cli_command.format(access_control=access_control)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+
+        #   Policy Map type access-control parent
+        p1 = re.compile(r'^\s*Policy Map type\s+(?P<type>.+)$')
+
+        #     Class ip_udp
+        p2 = re.compile(r'^\s*Class\s+(?P<class_name>\S+)$')
+
+        #       service-policy child
+        p3 = re.compile(r'^\s*service-policy\s+(?P<service_policy>\S+)$')
+
+        #       drop
+        p4 = re.compile(r'^\s*drop\s*$')
+
+        #       send-response icmp-unreachable
+        p5 = re.compile(r'^\s*send-response\s+(?P<send_response>\S+)$')
+
+        #       log
+        p6 = re.compile(r'^\s*log\s*$')
+
+        policy_map_dict = {}
+        class_dict = {}
+        current_class_dict = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            #   Policy Map type access-control parent
+            m = p1.match(line)
+            if m:
+                pm_type = m.groupdict()['type'].strip()
+                policy_map_dict = ret_dict.setdefault('policy_map', {})
+                policy_map_dict['type'] = pm_type
+                policy_map_dict['name'] = ""
+                class_dict = policy_map_dict.setdefault('class', {})
+                current_class_dict = None
+                continue
+
+            #     Class ip_udp
+            m = p2.match(line)
+            if m:
+                class_name = m.groupdict()['class_name']
+                current_class_dict = class_dict.setdefault(class_name, {})
+                continue
+
+            #       service-policy child
+            m = p3.match(line)
+            if m and current_class_dict is not None:
+                actions = current_class_dict.setdefault('actions', {})
+                actions['service_policy'] = m.groupdict()['service_policy']
+                continue
+
+            #       drop
+            m = p4.match(line)
+            if m and current_class_dict is not None:
+                actions = current_class_dict.setdefault('actions', {})
+                actions['drop'] = True
+                continue
+
+            #       send-response icmp-unreachable
+            m = p5.match(line)
+            if m and current_class_dict is not None:
+                actions = current_class_dict.setdefault('actions', {})
+                actions['send_response'] = m.groupdict()['send_response']
+                continue
+
+            #       log
+            m = p6.match(line)
+            if m and current_class_dict is not None:
+                actions = current_class_dict.setdefault('actions', {})
+                actions['log'] = True
+                continue
+
+        return ret_dict
+
+
+class ShowPolicyMapControlPlaneAllSchema(MetaParser):
+    """Schema for show policy-map control-plane all"""
+    schema = {
+        'control_plane': {
+            'service_policy': {
+                'output': {
+                    Any(): {
+                        'class': {
+                            Any(): {
+                                'packets': int,
+                                'bytes': int,
+                                'rate': {
+                                    'interval': int,
+                                    'offered_rate_bps': int,
+                                    'drop_rate_bps': int
+                                },
+                                'match_evaluated': str,
+                                'match': ListOf(str),
+                                Optional('qos_set'): {
+                                    'ip': {
+                                        'dscp': {
+                                            Any(): {
+                                                'marker_statistics': str
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+class ShowPolicyMapControlPlaneAll(ShowPolicyMapControlPlaneAllSchema):
+    """Parser for show policy-map control-plane all"""
+    cli_command = "show policy-map control-plane all"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        current_class_dict = None
+        classes_dict = None
+        qos_set_active = False
+        dscp_name = None
+
+        #  Control Plane
+        p1 = re.compile(r'^\s*Control Plane$')
+
+        #   Service-policy output: copp
+        p2 = re.compile(r'^\s*Service-policy\s+output\s*:\s*(?P<policy>\S+)$')
+
+        #     Class-map: copp (match-all)
+        p3 = re.compile(r'^\s*Class-map\s*:\s*(?P<class_name>\S+)\s+\((?P<match_eval>[\w\-]+)\)$')
+
+        #       44266 packets, 3452858 bytes
+        p4 = re.compile(r'^\s*(?P<packets>\d+)\s+packets,\s+(?P<bytes>\d+)\s+bytes$')
+
+        #       5 minute offered rate 91000 bps, drop rate 0000 bps
+        p5 = re.compile(r'^\s*(?P<interval>\d+)\s+minute(?:s)?\s+offered\s+rate\s+(?P<offered>\d+)\s+bps,\s+drop\s+rate\s+(?P<drop>\d+)\s+bps$')
+
+        #       Match: access-group name copp
+        p6 = re.compile(r'^\s*Match\s*:\s*(?P<match>.+)$')
+
+        #       QoS Set
+        p7 = re.compile(r'^\s*QoS\s+Set$')
+
+        #         ip dscp default
+        p8 = re.compile(r'^\s*ip\s+dscp\s+(?P<dscp>\S+)$')
+
+        #           Marker statistics: Disabled
+        p9 = re.compile(r'^\s*Marker\s+statistics\s*:\s*(?P<marker>\S+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            #  Control Plane
+            m = p1.match(line)
+            if m:
+                cp_dict = ret_dict.setdefault('control_plane', {})
+                continue
+
+            #   Service-policy output: copp
+            m = p2.match(line)
+            if m:
+                policy = m.group('policy')
+                service_policy_dict = ret_dict.setdefault('control_plane', {}).setdefault('service_policy', {})
+                output_dict = service_policy_dict.setdefault('output', {})
+                policy_dict = output_dict.setdefault(policy, {})
+                classes_dict = policy_dict.setdefault('class', {})
+                continue
+
+            #     Class-map: copp (match-all)
+            m = p3.match(line)
+            if m:
+                class_name = m.group('class_name')
+                match_eval = m.group('match_eval')
+                current_class_dict = classes_dict.setdefault(class_name, {})
+                current_class_dict['match_evaluated'] = match_eval
+                qos_set_active = False
+                dscp_name = None
+                continue
+
+            #       44266 packets, 3452858 bytes
+            m = p4.match(line)
+            if m and current_class_dict is not None:
+                current_class_dict['packets'] = int(m.group('packets'))
+                current_class_dict['bytes'] = int(m.group('bytes'))
+                continue
+
+            #       5 minute offered rate 91000 bps, drop rate 0000 bps
+            m = p5.match(line)
+            if m and current_class_dict is not None:
+                interval_minutes = int(m.group('interval'))
+                rate_dict = current_class_dict.setdefault('rate', {})
+                rate_dict['interval'] = interval_minutes * 60
+                rate_dict['offered_rate_bps'] = int(m.group('offered'))
+                rate_dict['drop_rate_bps'] = int(m.group('drop'))
+                continue
+
+            #       Match: access-group name copp
+            m = p6.match(line)
+            if m and current_class_dict is not None:
+                match_list = current_class_dict.setdefault('match', [])
+                match_list.append(m.group('match'))
+                continue
+
+            #       QoS Set
+            m = p7.match(line)
+            if m and current_class_dict is not None:
+                qos_set_active = True
+                current_class_dict.setdefault('qos_set', {})
+                continue
+
+            #         ip dscp default
+            m = p8.match(line)
+            if m and current_class_dict is not None and qos_set_active:
+                dscp_name = m.group('dscp')
+                qos_set_dict = current_class_dict.setdefault('qos_set', {})
+                ip_dict = qos_set_dict.setdefault('ip', {})
+                dscp_dict = ip_dict.setdefault('dscp', {})
+                dscp_entry = dscp_dict.setdefault(dscp_name, {})
+                continue
+
+            #           Marker statistics: Disabled
+            m = p9.match(line)
+            if m and current_class_dict is not None and qos_set_active and dscp_name:
+                qos_set_dict = current_class_dict.get('qos_set', {})
+                ip_dict = qos_set_dict.get('ip', {})
+                dscp_dict = ip_dict.get('dscp', {})
+                dscp_entry = dscp_dict.get(dscp_name, {})
+                dscp_entry['marker_statistics'] = m.group('marker')
+                # Ensure assignment back in case references were not direct (defensive)
+                dscp_dict[dscp_name] = dscp_entry
+                ip_dict['dscp'] = dscp_dict
+                qos_set_dict['ip'] = ip_dict
+                current_class_dict['qos_set'] = qos_set_dict
+                continue
+
+        return ret_dict
+
+
+class ShowPolicyMapSessionOutSchema(MetaParser):
+    """Schema for show policy-map session out"""
+    schema = {
+        "sessions": {
+            Any(): {
+                "service_policy": {
+                    "direction": str,
+                    "name": str,
+                    "class_map": {
+                        Any(): {
+                            "match_type": str,
+                            Optional("match"): str,
+                            Optional("queueing"): bool,
+                            Optional("counters"): {
+                                Optional("packets"): int,
+                                Optional("bytes"): int,
+                                Optional("interval_seconds"): int,
+                                Optional("offered_rate_bps"): int,
+                                Optional("drop_rate_bps"): int,
+                                Optional("pkts_output"): int,
+                                Optional("bytes_output"): int
+                            },
+                            Optional("queue"): {
+                                Optional("limit_packets"): int,
+                                Optional("queue_depth"): int,
+                                Optional("total_drops"): int,
+                                Optional("no_buffer_drops"): int
+                            },
+                            Optional("shape"): {
+                                Optional("type"): str,
+                                Optional("cir"): int,
+                                Optional("bc"): int,
+                                Optional("be"): int,
+                                Optional("target_shape_rate_bps"): int
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+class ShowPolicyMapSessionOut(ShowPolicyMapSessionOutSchema):
+    """Parser for show policy-map session out"""
+    cli_command = "show policy-map session out"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        session_id = None
+        service_policy_dict = None
+        class_entry = None
+
+        #  SSS session identifier 16 -
+        p1 = re.compile(r'^\s*SSS\s+session\s+identifier\s+(?P<session_id>\d+)\s*-\s*$')
+
+        #   Service-policy output: ShaperDT
+        p2 = re.compile(r'^\s*Service-policy\s+(?P<direction>\w+)\s*:\s*(?P<name>\S+)$')
+
+        #     Class-map: class-default (match-any)
+        p3 = re.compile(r'^\s*Class-map\s*:\s*(?P<class_name>\S+)\s*\((?P<match_type>[\w\-]+)\)\s*$')
+
+        #       0 packets, 0 bytes
+        p4 = re.compile(r'^\s*(?P<packets>\d+)\s+packets,\s+(?P<bytes>\d+)\s+bytes$')
+
+        #       30 second offered rate 0000 bps, drop rate 0000 bps
+        p5 = re.compile(r'^\s*(?P<interval_seconds>\d+)\s+second\s+offered\s+rate\s+(?P<offered_rate_bps>\d+)\s+bps,\s+drop\s+rate\s+(?P<drop_rate_bps>\d+)\s+bps$')
+
+        #       Match: any
+        p6 = re.compile(r'^\s*Match\s*:\s*(?P<match>.*\S)$')
+
+        #       Queueing
+        p7 = re.compile(r'^\s*Queueing$')
+
+        #       queue limit 64 packets
+        p8 = re.compile(r'^\s*queue\s+limit\s+(?P<limit_packets>\d+)\s+packets$')
+
+        #       (queue depth/total drops/no-buffer drops) 0/0/0
+        p9 = re.compile(r'^\s*\(queue\s+depth/total\s+drops/no-buffer\s+drops\)\s+(?P<queue_depth>\d+)/(?P<total_drops>\d+)/(?P<no_buffer_drops>\d+)$')
+
+        #       (pkts output/bytes output) 0/0
+        p10 = re.compile(r'^\s*\(pkts\s+output/bytes\s+output\)\s+(?P<pkts_output>\d+)/(?P<bytes_output>\d+)$')
+
+        #       shape (average) cir 10000, bc 40, be 40
+        p11 = re.compile(r'^\s*shape\s*\((?P<type>\w+)\)\s+cir\s+(?P<cir>\d+),\s+bc\s+(?P<bc>\d+),\s+be\s+(?P<be>\d+)$')
+
+        #       target shape rate 10000
+        p12 = re.compile(r'^\s*target\s+shape\s+rate\s+(?P<target_shape_rate_bps>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            #  SSS session identifier 16 -
+            m = p1.match(line)
+            if m:
+                session_id = m.group("session_id")
+                session_dict = ret_dict.setdefault("sessions", {}).setdefault(session_id, {})
+                service_policy_dict = None
+                class_entry = None
+                continue
+
+            #   Service-policy output: ShaperDT
+            m = p2.match(line)
+            if m and session_id is not None:
+                group = m.groupdict()
+                service_policy_dict = session_dict.setdefault("service_policy", {})
+                service_policy_dict["direction"] = group["direction"]
+                service_policy_dict["name"] = group["name"]
+                class_entry = None
+                continue
+
+            #     Class-map: class-default (match-any)
+            m = p3.match(line)
+            if m and service_policy_dict is not None:
+                group = m.groupdict()
+                class_name = group["class_name"]
+                class_map_dict = service_policy_dict.setdefault("class_map", {})
+                class_entry = class_map_dict.setdefault(class_name, {})
+                class_entry["match_type"] = group["match_type"]
+                continue
+
+            #       0 packets, 0 bytes
+            m = p4.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["packets"] = int(group["packets"])
+                counters["bytes"] = int(group["bytes"])
+                continue
+
+            #       30 second offered rate 0000 bps, drop rate 0000 bps
+            m = p5.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["interval_seconds"] = int(group["interval_seconds"])
+                counters["offered_rate_bps"] = int(group["offered_rate_bps"])
+                counters["drop_rate_bps"] = int(group["drop_rate_bps"])
+                continue
+
+            #       Match: any
+            m = p6.match(line)
+            if m and class_entry is not None:
+                class_entry["match"] = m.group("match")
+                continue
+
+            #       Queueing
+            m = p7.match(line)
+            if m and class_entry is not None:
+                class_entry["queueing"] = True
+                continue
+
+            #       queue limit 64 packets
+            m = p8.match(line)
+            if m and class_entry is not None:
+                queue_dict = class_entry.setdefault("queue", {})
+                queue_dict["limit_packets"] = int(m.group("limit_packets"))
+                continue
+
+            #       (queue depth/total drops/no-buffer drops) 0/0/0
+            m = p9.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                queue_dict = class_entry.setdefault("queue", {})
+                queue_dict["queue_depth"] = int(group["queue_depth"])
+                queue_dict["total_drops"] = int(group["total_drops"])
+                queue_dict["no_buffer_drops"] = int(group["no_buffer_drops"])
+                continue
+
+            #       (pkts output/bytes output) 0/0
+            m = p10.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                counters = class_entry.setdefault("counters", {})
+                counters["pkts_output"] = int(group["pkts_output"])
+                counters["bytes_output"] = int(group["bytes_output"])
+                continue
+
+            #       shape (average) cir 10000, bc 40, be 40
+            m = p11.match(line)
+            if m and class_entry is not None:
+                group = m.groupdict()
+                shape_dict = class_entry.setdefault("shape", {})
+                shape_dict["type"] = group["type"]
+                shape_dict["cir"] = int(group["cir"])
+                shape_dict["bc"] = int(group["bc"])
+                shape_dict["be"] = int(group["be"])
+                continue
+
+            #       target shape rate 10000
+            m = p12.match(line)
+            if m and class_entry is not None:
+                shape_dict = class_entry.setdefault("shape", {})
+                shape_dict["target_shape_rate_bps"] = int(m.group("target_shape_rate_bps"))
+                continue
+
         return ret_dict

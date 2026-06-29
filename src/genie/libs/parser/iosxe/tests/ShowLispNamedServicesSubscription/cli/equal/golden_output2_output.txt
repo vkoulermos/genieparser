@@ -1,0 +1,4 @@
+show lisp locator-table default instance-id 4 named-services subscription     
+LISP EID Subscriptions for LISP 0 EID-table N/A (IID 4), 1 entries
+Prefix                                  Source                         Created     Last Update
+firewall                                remote-eid                     00:28:55    00:28:55 

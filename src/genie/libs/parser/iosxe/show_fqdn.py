@@ -8,7 +8,7 @@ import re
 
 # Metaparser
 from genie.metaparser import MetaParser
-from genie.metaparser.util.schemaengine import Any, ListOf
+from genie.metaparser.util.schemaengine import Any, ListOf, Optional
 
 # ====================================================
 # Schema for 'show fqdn packet statistics'
@@ -349,3 +349,251 @@ class ShowFQDNDatabase(ShowFQDNDatabaseSchema):
                 continue
 
         return ret_dict
+
+# ====================================================
+# Schema for 'show fqdn database fqdn'
+# ====================================================
+class ShowFQDNDatabaseFqdnSchema(MetaParser):
+    """ Schema for show fqdn database fqdn """
+
+    schema = {
+        'fqdn_database': {
+            'ip_address': {
+                Any(): {
+                    'type': str,
+                    'ttl': str,
+                    'matched_fqdn': str,
+                }
+            }
+        }
+    }
+
+# =============================================
+# Parser for 'show fqdn database fqdn'
+# =============================================
+class ShowFQDNDatabaseFqdn(ShowFQDNDatabaseFqdnSchema):
+
+    cli_command = 'show fqdn database fqdn {fqdn}'
+
+    def cli(self, fqdn='', output=None):
+
+        if output is None:
+            output = self.device.execute(self.cli_command.format(fqdn=fqdn))
+
+        ret_dict = {}
+
+        # 1.1.1.23                      IPv4       899/900      host1.cisco.com
+        # 1:1:1::23                     IPv6       896/900      host1.cisco.com
+        p = re.compile(r'^(?P<ip_address>\S+)\s+(?P<type>\S+)\s+(?P<ttl>\S+)\s+(?P<matched_fqdn>\S+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # 1.1.1.23                      IPv4       899/900      host1.cisco.com
+            # 1:1:1::23                     IPv6       896/900      host1.cisco.com
+            m = p.match(line)
+            if m:
+                fqdn_database = ret_dict.setdefault('fqdn_database', {})
+                ip_dict = fqdn_database.setdefault('ip_address', {}).setdefault(
+                    m.groupdict()['ip_address'], {})
+                ip_dict['type'] = m.groupdict()['type']
+                ip_dict['ttl'] = m.groupdict()['ttl']
+                ip_dict['matched_fqdn'] = m.groupdict()['matched_fqdn']
+                continue
+
+        return ret_dict    
+
+# ====================================================
+# Schema for 'show fqdn debug statistics'
+# ====================================================
+class ShowFQDNDebugStatisticsSchema(MetaParser):
+    """ Schema for show fqdn debug statistics """
+
+    schema = {
+        'fqdn_debug_statistics': {
+            'fqdn_alloc_a_rec_cnt': int,
+            'fqdn_free_a_rec_cnt': int,
+            'fqdn_mapping_id_create_success': int,
+            'fqdn_mapping_id_create_failed': int,
+            'fqdn_mapping_id_update_address': int,
+            'fqdn_mapping_id_delete_success': int,
+            'fqdn_mapping_id_delete_failed': int,
+            'fqdn_rev_map_id_create_success': int,
+            'fqdn_rev_map_id_create_failure': int,
+            'fqdn_rev_map_id_delete_failure': int,
+            'fqdn_rev_map_id_delete_success': int,
+            'fqdn_add_to_maindb_success': int,
+            'fqdn_add_to_maindb_failure': int,
+            'fqdn_update_to_maindb': int,
+            'fqdn_delete_to_maindb_success': int,
+            'fqdn_delete_to_maindb_failure': int,
+            'fqdn_add_ipv6_addr_to_maindb_success': int,
+            'fqdn_add_ipv4_addr_to_maindb_success': int,
+            'fqdn_add_ipv6_addr_to_maindb_failed': int,
+            'fqdn_add_ipv4_addr_to_maindb_failed': int,
+            'fqdn_del_ipv6_addr_to_maindb_success': int,
+            'fqdn_del_ipv4_addr_to_maindb_success': int,
+            'fqdn_del_ipv6_addr_to_maindb_failed': int,
+            'fqdn_del_ipv4_addr_to_maindb_failed': int,
+            'fqdn_client_reg_count': int,
+            'fqdn_client_dereg_count': int,
+            'fqdn_client_notify_add_count': int,
+            'fqdn_client_notify_del_count': int,
+            'fqdn_client_notify_ack_count': int,
+            'fqdn_client_notify_nack_count': int,
+            'fqdn_client_query_count': int,
+            'fqdn_client_query_resp_count': int,
+            'fqdn_client_query_resp_free_count': int,
+            'fqdn_ha_message_send_success_count': int,
+            'fqdn_ha_message_send_fail_count': int,
+        }
+    }
+
+# =============================================
+# Parser for 'show fqdn debug statistics'
+# =============================================
+class ShowFQDNDebugStatistics(ShowFQDNDebugStatisticsSchema):
+
+    cli_command = 'show fqdn debug statistics'
+
+    def cli(self, output=None):
+
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        # fqdn_alloc_a_rec_cnt                     : 0
+        p = re.compile(r'^(?P<key>[\w]+)\s+:\s+(?P<value>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # fqdn_alloc_a_rec_cnt                     : 0
+            m = p.match(line)
+            if m:
+                fqdn_debug_statistics = ret_dict.setdefault('fqdn_debug_statistics', {})
+                key = m.groupdict()['key']
+                value = int(m.groupdict()['value'])
+                fqdn_debug_statistics[key] = value
+                continue
+
+        return ret_dict
+
+# ====================================================
+# Schema for 'show fqdn summary'
+# ====================================================
+class ShowFQDNSummarySchema(MetaParser):
+    """ Schema for show fqdn summary """
+
+    schema = {
+        'fqdn_ttl_timeout_factor': str,
+        Optional('registered_fqdns'): {
+            Any(): {
+                'registered_module_ids_ipv4': ListOf(str),
+                'registered_module_ids_ipv6': ListOf(str),
+            }
+        }
+    }
+
+# =============================================
+# Parser for 'show fqdn summary'
+# =============================================
+class ShowFQDNSummary(ShowFQDNSummarySchema):
+
+    cli_command = 'show fqdn summary'
+
+    def cli(self, output=None):
+
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        # FQDN ttl timeout factor: Infinite
+        p1 = re.compile(r'^FQDN\s+ttl\s+timeout\s+factor:\s+(?P<fqdn_ttl_timeout_factor>.+)$')
+
+        # FQDN: host1.demo1.msft.com
+        p2 = re.compile(r'^FQDN:\s+(?P<fqdn_name>[\S]+)$')
+
+        # Registered Module IDs for IPv4: FQDN ACL Mgr,
+        p3 = re.compile(r'^Registered\s+Module\s+IDs\s+for\s+IPv4:\s+(?P<module_ids>.*)$')
+
+        # Registered Module IDs for IPv6:
+        p4 = re.compile(r'^Registered\s+Module\s+IDs\s+for\s+IPv6:\s+(?P<module_ids>.*)$')
+
+        current_fqdn = None
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # FQDN ttl timeout factor: Infinite
+            m = p1.match(line)
+            if m:
+                ret_dict['fqdn_ttl_timeout_factor'] = m.groupdict()['fqdn_ttl_timeout_factor']
+                continue
+
+            # FQDN: host1.demo1.msft.com
+            m = p2.match(line)
+            if m:
+                current_fqdn = m.groupdict()['fqdn_name']
+                fqdn_dict = ret_dict.setdefault('registered_fqdns', {}).setdefault(current_fqdn, {})
+                fqdn_dict['registered_module_ids_ipv4'] = []
+                fqdn_dict['registered_module_ids_ipv6'] = []
+                continue
+
+            # Registered Module IDs for IPv4: FQDN ACL Mgr,
+            m = p3.match(line)
+            if m and current_fqdn:
+                module_ids = m.groupdict()['module_ids'].strip()
+                if module_ids:
+                    fqdn_dict['registered_module_ids_ipv4'] = [mid.strip() for mid in module_ids.rstrip(',').split(',') if mid.strip()]
+                continue
+
+            # Registered Module IDs for IPv6:
+            m = p4.match(line)
+            if m and current_fqdn:
+                module_ids = m.groupdict()['module_ids'].strip()
+                if module_ids:
+                    fqdn_dict['registered_module_ids_ipv6'] = [mid.strip() for mid in module_ids.rstrip(',').split(',') if mid.strip()]
+                continue
+
+        return ret_dict
+
+# ====================================================
+# Schema for 'show fqdn database statistics'
+# ====================================================
+class ShowFQDNDatabaseStatisticsSchema(MetaParser):
+    """ Schema for show fqdn database statistics """
+
+    schema = {
+        'total_number_of_fqdn': int
+    }
+
+# =============================================
+# Parser for 'show fqdn database statistics'
+# =============================================
+class ShowFQDNDatabaseStatistics(ShowFQDNDatabaseStatisticsSchema):
+
+    cli_command = 'show fqdn database statistics'
+
+    def cli(self, output=None):
+
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        # Total Number of fqdn: 1
+        p1 = re.compile(r'^Total\s+Number\s+of\s+fqdn:\s+(?P<total_number_of_fqdn>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # Total Number of fqdn: 1
+            m = p1.match(line)
+            if m:
+                ret_dict['total_number_of_fqdn'] = int(m.groupdict()['total_number_of_fqdn'])
+                continue
+
+        return ret_dict    

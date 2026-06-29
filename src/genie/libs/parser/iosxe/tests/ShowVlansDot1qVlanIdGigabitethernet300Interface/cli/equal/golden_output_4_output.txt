@@ -1,0 +1,4 @@
+show vlans dot1q 51 {vlan_id} gigabitethernet0/2/2 {interface}
+Total statistics for 802.1Q VLAN 51 on GigabitEthernet0/2/2:
+   100 packets, 6800 bytes input
+   0 packets, 0 bytes output

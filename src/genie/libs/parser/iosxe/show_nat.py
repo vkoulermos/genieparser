@@ -33,6 +33,7 @@ IOSXE parser for the following show commands:
    * show nat64 mappings static key-address {address}
    * show ip nat limits all-host
    * show nat64 routes
+   * show redirect translations | include {ip}
 '''
 # Python
 import re
@@ -341,17 +342,34 @@ class ShowNat64StatisticsSchema(MetaParser):
             },
             Optional('interface_statistics'): {
                 Any(): {
-                    'stateful_prefix': {
+                    Optional('stateful_prefix'): {
                         Any(): {
                             'packets_dropped': int,
                             'packets_translated': {
                                 'v4_to_v6': int,
                                 'v6_to_v4': int
                             }
+                        }
                     },
-                    'ipv4': str,
-                    'ipv6': str
-                    }
+                    Optional('ipv4'): str,
+                    Optional('ipv6'): str,
+                    Optional('packets_translated'): {
+                        'ipv4_to_ipv6': {
+                            Optional('stateless'): int,
+                            Optional('stateful'): int,
+                            Optional('nat46'): int,
+                            Optional('map_t'): int,
+                            Optional('map_e'): int
+                        },
+                        'ipv6_to_ipv4': {
+                            Optional('stateless'): int,
+                            Optional('stateful'): int,
+                            Optional('nat46'): int,
+                            Optional('map_t'): int,
+                            Optional('map_e'): int
+                        }
+                    },
+                    Optional('packets_dropped'): int
                 }
             },
             Optional('nat64_enabled_interfaces'): int,
@@ -472,6 +490,33 @@ class ShowNat64Statistics(ShowNat64StatisticsSchema):
         # Dropped: 3461156
         p18 = re.compile(r'^Dropped+\: +(?P<dropped_pkts>\d+)')
         
+        # Packets translated (IPv4 -> IPv6)
+        p19 = re.compile(r'^Packets translated \(IPv4 \-\> IPv6\)$')
+        
+        # Packets translated (IPv6 -> IPv4)
+        p20 = re.compile(r'^Packets translated \(IPv6 \-\> IPv4\)$')
+        
+        # Stateless: 0
+        p21 = re.compile(r'^Stateless\: +(?P<stateless>\d+)$')
+        
+        # Stateful: 0
+        p22 = re.compile(r'^Stateful\: +(?P<stateful>\d+)$')
+        
+        # nat46: 0
+        p23 = re.compile(r'^nat46\: +(?P<nat46>\d+)$')
+        
+        # MAP-T: 0
+        p24 = re.compile(r'^MAP-T\: +(?P<map_t>\d+)$')
+        
+        # MAP-E: 0
+        p25 = re.compile(r'^MAP-E\: +(?P<map_e>\d+)$')
+        
+        # Interface Statistics section header
+        p26 = re.compile(r'^Interface Statistics$')
+        
+        # NAT64 Statistics header
+        p27 = re.compile(r'^NAT64 Statistics$')
+        
         for line in output.splitlines():
             line = line.strip()
         
@@ -525,11 +570,17 @@ class ShowNat64Statistics(ShowNat64StatisticsSchema):
             m = p5.match(line)
             if m:
                 group = m.groupdict()
-                if 'interface_statistics' not in nat64_dict.keys():
-                    prefix_dict['packets_dropped'] = int(group['packets_dropped'])
-                    continue
-                else:
+                if 'state_dict' in locals() and state_dict:
+                    # Stateful prefix level packets dropped (highest priority)
                     state_dict['packets_dropped'] = int(group['packets_dropped'])
+                    continue
+                elif 'int_dict' in locals() and int_dict and 'current_translation_direction' in locals():
+                    # Interface-level packets dropped (for new format only)
+                    int_dict['packets_dropped'] = int(group['packets_dropped'])
+                    continue
+                elif 'prefix_dict' in locals() and prefix_dict:
+                    # Global prefix level packets dropped
+                    prefix_dict['packets_dropped'] = int(group['packets_dropped'])
                     continue
         
             # TenGigabitEthernet5/0/12 (IPv4 not configured, IPv6 not configured):
@@ -539,15 +590,17 @@ class ShowNat64Statistics(ShowNat64StatisticsSchema):
                 nat64_dict = ret_dict.setdefault('nat64_stats', {})
                 interface_dict = nat64_dict.setdefault('interface_statistics', {})
                 int_dict = interface_dict.setdefault(str(group['interface']), {})
-                stateful_dict = int_dict.setdefault('stateful_prefix', {})
-                stateful_dict['ipv4'] = str(group['ipv4'])
-                stateful_dict['ipv6'] = str(group['ipv6'])
+                int_dict['ipv4'] = str(group['ipv4'])
+                int_dict['ipv6'] = str(group['ipv6'])
+                # Reset translation direction for interface-level parsing
+                current_translation_direction = None
                 continue
         
             # Stateful Prefix: 2010:1::/96
             m = p7.match(line)
             if m:
                 group = m.groupdict()
+                stateful_dict = int_dict.setdefault('stateful_prefix', {})
                 state_dict = stateful_dict.setdefault(group['stateful_prefix'], {})
                 v4v6_dict = state_dict.setdefault('packets_translated', {})
                 continue
@@ -645,6 +698,74 @@ class ShowNat64Statistics(ShowNat64StatisticsSchema):
             if m:
                 group = m.groupdict()
                 cef_dict['dropped_pkts'] = int(group['dropped_pkts'])
+                continue
+                
+            # NAT64 Statistics header
+            m = p27.match(line)
+            if m:
+                continue
+                
+            # Interface Statistics section header
+            m = p26.match(line)
+            if m:
+                in_interface_stats = True
+                continue
+                
+            # Packets translated (IPv4 -> IPv6)
+            m = p19.match(line)
+            if m:
+                current_translation_direction = 'ipv4_to_ipv6'
+                continue
+                
+            # Packets translated (IPv6 -> IPv4)
+            m = p20.match(line)
+            if m:
+                current_translation_direction = 'ipv6_to_ipv4'
+                continue
+                
+            # Stateless: 0
+            m = p21.match(line)
+            if m and 'current_translation_direction' in locals() and 'int_dict' in locals():
+                group = m.groupdict()
+                packets_trans_dict = int_dict.setdefault('packets_translated', {})
+                direction_dict = packets_trans_dict.setdefault(current_translation_direction, {})
+                direction_dict['stateless'] = int(group['stateless'])
+                continue
+                
+            # Stateful: 0
+            m = p22.match(line)
+            if m and 'current_translation_direction' in locals() and 'int_dict' in locals():
+                group = m.groupdict()
+                packets_trans_dict = int_dict.setdefault('packets_translated', {})
+                direction_dict = packets_trans_dict.setdefault(current_translation_direction, {})
+                direction_dict['stateful'] = int(group['stateful'])
+                continue
+                
+            # nat46: 0
+            m = p23.match(line)
+            if m and 'current_translation_direction' in locals() and 'int_dict' in locals():
+                group = m.groupdict()
+                packets_trans_dict = int_dict.setdefault('packets_translated', {})
+                direction_dict = packets_trans_dict.setdefault(current_translation_direction, {})
+                direction_dict['nat46'] = int(group['nat46'])
+                continue
+                
+            # MAP-T: 0
+            m = p24.match(line)
+            if m and 'current_translation_direction' in locals() and 'int_dict' in locals():
+                group = m.groupdict()
+                packets_trans_dict = int_dict.setdefault('packets_translated', {})
+                direction_dict = packets_trans_dict.setdefault(current_translation_direction, {})
+                direction_dict['map_t'] = int(group['map_t'])
+                continue
+                
+            # MAP-E: 0
+            m = p25.match(line)
+            if m and 'current_translation_direction' in locals() and 'int_dict' in locals():
+                group = m.groupdict()
+                packets_trans_dict = int_dict.setdefault('packets_translated', {})
+                direction_dict = packets_trans_dict.setdefault(current_translation_direction, {})
+                direction_dict['map_e'] = int(group['map_e'])
                 continue
                    
         return ret_dict
@@ -2875,3 +2996,83 @@ class ShowNat64Routes(ShowNat64RoutesSchema):
             parsed['nat64_routes'] = nat64_routes_data
         
         return parsed
+
+
+class ShowRedirectTranslationsIncludeIpSchema(MetaParser):
+    """Schema for show redirect translations | include <IP>"""
+
+    schema = {
+        "redirect_translations": {
+            "entries": {
+                Any(): {
+                    "destination_ip": str,
+                    "destination_port": int,
+                    "server_ip": str,
+                    "server_port": int,
+                    "protocol": str,
+                    "in_flags": str,
+                    "out_flags": str,
+                    "timestamp": str
+                }
+            }
+        }
+    }
+
+
+class ShowRedirectTranslationsIncludeIp(ShowRedirectTranslationsIncludeIpSchema):
+    """Parser for show redirect translations | include <IP>"""
+
+    cli_command = "show redirect translations | include {ip}"
+
+    def cli(self, ip="", output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command.format(ip=ip))
+
+        ret_dict = {}
+        index = 1
+
+        # Destination IP/port    Server IP/port         Prot  In Flags  Out Flags  Timestamp
+        p1 = re.compile(r"^Destination\s+IP/port\s+Server\s+IP/port\s+Prot\s+In\s+Flags\s+Out\s+Flags\s+Timestamp$")
+
+        # 10.0.0.11      80     10.0.0.1         8090   TCP   FIN       FIN        Jan 18 2005 10:33:24
+        p2 = re.compile(
+            r"^(?P<destination_ip>\d{1,3}(?:\.\d{1,3}){3})\s+"
+            r"(?P<destination_port>\d+)\s+"
+            r"(?P<server_ip>\d{1,3}(?:\.\d{1,3}){3})\s+"
+            r"(?P<server_port>\d+)\s+"
+            r"(?P<protocol>\S+)\s+"
+            r"(?P<in_flags>\S+)\s+"
+            r"(?P<out_flags>\S+)\s+"
+            r"(?P<timestamp>.+)$"
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Destination IP/port    Server IP/port         Prot  In Flags  Out Flags  Timestamp
+            m = p1.match(line)
+            if m:
+                # Header line, skip
+                continue
+
+            # 10.0.0.11      80     10.0.0.1         8090   TCP   FIN       FIN        Jan 18 2005 10:33:24
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                redirect_dict = ret_dict.setdefault("redirect_translations", {})
+                entries_dict = redirect_dict.setdefault("entries", {})
+                entry = entries_dict.setdefault(index, {})
+                entry["destination_ip"] = group["destination_ip"]
+                entry["destination_port"] = int(group["destination_port"])
+                entry["server_ip"] = group["server_ip"]
+                entry["server_port"] = int(group["server_port"])
+                entry["protocol"] = group["protocol"]
+                entry["in_flags"] = group["in_flags"]
+                entry["out_flags"] = group["out_flags"]
+                entry["timestamp"] = group["timestamp"]
+                index += 1
+                continue
+
+        return ret_dict

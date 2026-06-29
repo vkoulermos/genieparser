@@ -40,9 +40,10 @@ class ShowRomvarSchema(MetaParser):
             Optional("rmi_remote_ip"): str,
             "bsi": int,
             Optional("ret_2_rcalts"): str,
-            "random_num": int,
+            Optional("random_num"): int,
             Optional("thrput"): str,
             Optional("config_file"): str,
+            Optional("debug_conf"): str,
             Optional("bootldr"): str,
             Optional("crashinfo"): str,
             Optional("no_console"): int,
@@ -259,6 +260,9 @@ class ShowRomvar(ShowRomvarSchema):
         # CONFIG_FILE =
         p_config_file = re.compile(r"^CONFIG_FILE\s*=\s*(?P<config_file>.*)$")
 
+        # DEBUG_CONF = /flash/debug.conf
+        p_debug_conf = re.compile(r"^DEBUG_CONF\s*=\s*(?P<debug_conf>\S+)$")
+
         # BOOTLDR =
         p_bootldr = re.compile(r"^BOOTLDR\s*=\s*(?P<bootldr>.*)$")
 
@@ -290,13 +294,13 @@ class ShowRomvar(ShowRomvarSchema):
         p_crash = re.compile(r"^CRASHINFO\s*=\s*(?P<crash>.*)$")
 
         # NO_CONSOLE = 1
-        p_no_console = re.compile(r"^NO_CONSOLE\s*=\s*(?P<number>\d*)$")
+        p_no_console = re.compile(r"^NO_CONSOLE\s*=\s*(?P<number>\d+)$")
 
         # BOOT_DEVICE_MODE = meraki
         p_boot_device_mode= re.compile(r"^BOOT_DEVICE_MODE\s*=\s*(?P<boot_device_mode>.*)$")
 
         # BOARDID = 28755
-        p_boardid = re.compile(r"^BOARDID\s*=\s*(?P<boardid>\d*)$")
+        p_boardid = re.compile(r"^BOARDID\s*=\s*(?P<boardid>\d+)$")
 
         # MAC_ADDR = 6C:13:D5:1B:5C:80
         p_mac_addr = re.compile(r"^MAC_ADDR\s*=\s*(?P<mac_addr>\S+)$")
@@ -320,7 +324,9 @@ class ShowRomvar(ShowRomvarSchema):
         p_motherboard_serial_num = re.compile(r"^MOTHERBOARD_SERIAL_NUM\s*=\s*(?P<motherboard_serial_num>\S+)$")
 
         # ROMMON_AUTOBOOT_ATTEMPT = 0
-        p_rommon_autoboot_attempt = re.compile(r"^ROMMON_AUTOBOOT_ATTEMPT\s*=\s*(?P<rommon_autoboot_attempt>\S+)$")
+        p_rommon_autoboot_attempt = re.compile(
+            r"^ROMMON_AUTOBOOT_ATTEMPT\s*=\s*"
+            r"(?P<rommon_autoboot_attempt>\d+)$")
 
         # SYSTEM_SERIAL_NUM = FOC2514L1HE
         p_system_serial_num = re.compile(r"^SYSTEM_SERIAL_NUM\s*=\s*(?P<system_serial_num>\S+)$")
@@ -344,7 +350,9 @@ class ShowRomvar(ShowRomvarSchema):
         p_boot_param_bkp = re.compile(r"^BOOT_PARAM_BKP\s*=(?P<boot_param_bkp>.*)$")
 
         # SWITCH_IGNORE_STARTUP_CFG=0
-        p_switch_ignore_startup_config = re.compile(r"^SWITCH_IGNORE_STARTUP_CFG\s*=(?P<switch_ignore_startup_config>.*)$")
+        p_switch_ignore_startup_config = re.compile(
+            r"^SWITCH_IGNORE_STARTUP_CFG\s*=\s*"
+            r"(?P<switch_ignore_startup_config>\d+)$")
 
         romvar_dict = {}
 
@@ -481,6 +489,11 @@ class ShowRomvar(ShowRomvarSchema):
                 match = p_config_file.match(line)
                 if len(match.group("config_file")):
                     romvar_dict["rommon_variables"]["config_file"] = match.group("config_file")
+                continue
+            # DEBUG_CONF = /flash/debug.conf
+            if p_debug_conf.match(line):
+                match = p_debug_conf.match(line)
+                romvar_dict["rommon_variables"]["debug_conf"] = match.group("debug_conf")
                 continue
             # BOOTLDR =
             if p_bootldr.match(line):

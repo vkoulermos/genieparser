@@ -1,0 +1,7 @@
+iolmsmr11#show lisp 0 instance-id 4 named-services subscriber    
+LISP Subscriber Information
+Entries total 3
+Subscriber         Type       Affinity-ID     Index          
+100.22.22.22:11323 Policy     -               3              
+100.88.88.88:22669 IID        -               1              
+100.99.99.99:65421 IID        -               2    

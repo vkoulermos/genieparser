@@ -44,6 +44,7 @@
     * show ipv6 virtual-reassembly features
     * show ipv6 mfib {group} active
     * show ipv6 traffic
+    * show ipv6 interface brief
 """
 
 # Python
@@ -2465,12 +2466,14 @@ class ShowIpv6cefExactRoute(ShowIpv6cefExactRouteSchema):
             output = self.device.execute(self.cli_command.format(source=source, destination=destination))
 
         # 11:1:0:1::1 -> 11:0:0:2::2 => IP adj out of Port-channel1, addr 11:0:0:2::2
-        p1 = re.compile(r'^(?P<source>[\d\:]+) +-> +(?P<destination>[\d\:]+) +=> IP adj out of +(?P<ip_adj>[\w\-\.\/]+), +addr +(?P<ip_addr>[\d\:]+)$')
+        # 1::1 -> 2::1 =>IPV6 adj out of HundredGigE1/0/51, addr FE80::42B5:C1FF:FEFF:D902
+        p1 = re.compile(r"(?P<source>[a-fA-F0-9:]+)\s*->\s*(?P<destination>[a-fA-F0-9:]+)\s*=>\s*IPV?6?\s*adj out of\s+(?P<ip_adj>[\w\-/.]+),\s+addr\s+(?P<ip_addr>[a-fA-F0-9:]+)")
 
         ret_dict = {}
         for line in output.splitlines():
             line = line.strip()
             # 11:1:0:1::1 -> 11:0:0:2::2 => IP adj out of Port-channel1, addr 11:0:0:2::2
+            # 1::1 -> 2::1 =>IPV6 adj out of HundredGigE1/0/51, addr FE80::42B5:C1FF:FEFF:D902
             m = p1.match(line)
             if m:
                 group = m.groupdict()
@@ -3912,6 +3915,400 @@ class ShowIpv6Traffic(ShowIpv6TrafficSchema):
                 d = ret_dict[section].setdefault(sub_section, {})
                 d["output"] = int(m.group(1))
                 d["retransmitted"] = int(m.group(2))
+                continue
+
+        return ret_dict
+
+
+
+class ShowIpv6VirtualReassemblySchema(MetaParser):
+    '''Schema for show ipv6 virtual-reassembly'''
+    schema = {
+        'interfaces': {
+            Any(): {  # Interface name as key (e.g., 'NVI0')
+                'status': str,
+                'direction': str,
+                'max_reassemblies': int,
+                'max_fragments': int,
+                'timeout': int,
+                'drop_fragments': str,
+                'current_reassembly_count': int,
+                'current_fragment_count': int,
+                'total_reassembly_count': int,
+                'total_reassembly_timeout_count': int,
+            }
+        }
+    }
+
+class ShowIpv6VirtualReassembly(ShowIpv6VirtualReassemblySchema):
+    '''Parser for show ipv6 virtual-reassembly'''
+    
+    cli_command = 'show ipv6 virtual-reassembly'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        result = {}
+
+        # NVI0:
+        p0 = re.compile(r'^(?P<interface>\S+):$')
+        
+        # IPv6 Virtual Fragment Reassembly (IPV6VFR) is ENABLED [out]
+        p1 = re.compile(r'^\s*IPv6 Virtual Fragment Reassembly \(IPV6VFR\) is (?P<status>\w+) \[(?P<direction>\w+)\]')
+        
+        # IPv6 configured concurrent reassemblies (max-reassemblies): 1024
+        p2 = re.compile(r'^\s*IPv6 configured concurrent reassemblies \(max-reassemblies\):\s*(?P<max_reassemblies>\d+)')
+        
+        # IPv6 configured fragments per reassembly (max-fragments): 16
+        p3 = re.compile(r'^\s*IPv6 configured fragments per reassembly \(max-fragments\):\s*(?P<max_fragments>\d+)')
+        
+        # IPv6 configured reassembly timeout (timeout): 3 seconds
+        p4 = re.compile(r'^\s*IPv6 configured reassembly timeout \(timeout\):\s*(?P<timeout>\d+)\s*seconds')
+        
+        # IPv6 configured drop fragments: OFF
+        p5 = re.compile(r'^\s*IPv6 configured drop fragments:\s*(?P<drop_fragments>\w+)')
+        
+        # IPv6 current reassembly count:0
+        p6 = re.compile(r'^\s*IPv6 current reassembly count:\s*(?P<current_reassembly>\d+)')
+        
+        # IPv6 current fragment count:0
+        p7 = re.compile(r'^\s*IPv6 current fragment count:\s*(?P<current_fragment>\d+)')
+        
+        # IPv6 total reassembly count:0
+        p8 = re.compile(r'^\s*IPv6 total reassembly count:\s*(?P<total_reassembly>\d+)')
+        
+        # IPv6 total reassembly timeout count:0
+        p9 = re.compile(r'^\s*IPv6 total reassembly timeout count:\s*(?P<total_timeout>\d+)')
+
+        current_interface = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # NVI0:
+            m0 = p0.match(line)
+            if m0:
+                current_interface = m0.group('interface')
+                interfaces = result.setdefault('interfaces', {})
+                interfaces[current_interface] = {}
+                continue
+
+            # IPv6 Virtual Fragment Reassembly (IPV6VFR) is ENABLED [out]
+            m1 = p1.match(line)
+            if m1 and current_interface:
+                result['interfaces'][current_interface]['status'] = m1.group('status')
+                result['interfaces'][current_interface]['direction'] = m1.group('direction')
+                continue
+
+            # IPv6 configured concurrent reassemblies (max-reassemblies): 1024
+            m2 = p2.match(line)
+            if m2 and current_interface:
+                result['interfaces'][current_interface]['max_reassemblies'] = int(m2.group('max_reassemblies'))
+                continue
+
+            # IPv6 configured fragments per reassembly (max-fragments): 16
+            m3 = p3.match(line)
+            if m3 and current_interface:
+                result['interfaces'][current_interface]['max_fragments'] = int(m3.group('max_fragments'))
+                continue
+
+            # IPv6 configured reassembly timeout (timeout): 3 seconds
+            m4 = p4.match(line)
+            if m4 and current_interface:
+                result['interfaces'][current_interface]['timeout'] = int(m4.group('timeout'))
+                continue
+
+            # IPv6 configured drop fragments: OFF
+            m5 = p5.match(line)
+            if m5 and current_interface:
+                result['interfaces'][current_interface]['drop_fragments'] = m5.group('drop_fragments')
+                continue
+
+            # IPv6 current reassembly count:0
+            m6 = p6.match(line)
+            if m6 and current_interface:
+                result['interfaces'][current_interface]['current_reassembly_count'] = int(m6.group('current_reassembly'))
+                continue
+
+            # IPv6 current fragment count:0
+            m7 = p7.match(line)
+            if m7 and current_interface:
+                result['interfaces'][current_interface]['current_fragment_count'] = int(m7.group('current_fragment'))
+                continue
+
+            # IPv6 total reassembly count:0
+            m8 = p8.match(line)
+            if m8 and current_interface:
+                result['interfaces'][current_interface]['total_reassembly_count'] = int(m8.group('total_reassembly'))
+                continue
+
+            # IPv6 total reassembly timeout count:0
+            m9 = p9.match(line)
+            if m9 and current_interface:
+                result['interfaces'][current_interface]['total_reassembly_timeout_count'] = int(m9.group('total_timeout'))
+                continue
+
+        return result
+
+
+
+
+class ShowIpv6VirtualReassemblySchema(MetaParser):
+    '''Schema for show ipv6 virtual-reassembly'''
+    schema = {
+        'interfaces': {
+            Any(): {  # Interface name as key (e.g., 'NVI0')
+                'status': str,
+                'direction': str,
+                'max_reassemblies': int,
+                'max_fragments': int,
+                'timeout': int,
+                'drop_fragments': str,
+                'current_reassembly_count': int,
+                'current_fragment_count': int,
+                'total_reassembly_count': int,
+                'total_reassembly_timeout_count': int,
+            }
+        }
+    }
+
+class ShowIpv6VirtualReassembly(ShowIpv6VirtualReassemblySchema):
+    '''Parser for show ipv6 virtual-reassembly'''
+    
+    cli_command = 'show ipv6 virtual-reassembly'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        result = {}
+
+        # NVI0:
+        p0 = re.compile(r'^(?P<interface>\S+):$')
+        
+        # IPv6 Virtual Fragment Reassembly (IPV6VFR) is ENABLED [out]
+        p1 = re.compile(r'^\s*IPv6 Virtual Fragment Reassembly \(IPV6VFR\) is (?P<status>\w+) \[(?P<direction>\w+)\]')
+        
+        # IPv6 configured concurrent reassemblies (max-reassemblies): 1024
+        p2 = re.compile(r'^\s*IPv6 configured concurrent reassemblies \(max-reassemblies\):\s*(?P<max_reassemblies>\d+)')
+        
+        # IPv6 configured fragments per reassembly (max-fragments): 16
+        p3 = re.compile(r'^\s*IPv6 configured fragments per reassembly \(max-fragments\):\s*(?P<max_fragments>\d+)')
+        
+        # IPv6 configured reassembly timeout (timeout): 3 seconds
+        p4 = re.compile(r'^\s*IPv6 configured reassembly timeout \(timeout\):\s*(?P<timeout>\d+)\s*seconds')
+        
+        # IPv6 configured drop fragments: OFF
+        p5 = re.compile(r'^\s*IPv6 configured drop fragments:\s*(?P<drop_fragments>\w+)')
+        
+        # IPv6 current reassembly count:0
+        p6 = re.compile(r'^\s*IPv6 current reassembly count:\s*(?P<current_reassembly>\d+)')
+        
+        # IPv6 current fragment count:0
+        p7 = re.compile(r'^\s*IPv6 current fragment count:\s*(?P<current_fragment>\d+)')
+        
+        # IPv6 total reassembly count:0
+        p8 = re.compile(r'^\s*IPv6 total reassembly count:\s*(?P<total_reassembly>\d+)')
+        
+        # IPv6 total reassembly timeout count:0
+        p9 = re.compile(r'^\s*IPv6 total reassembly timeout count:\s*(?P<total_timeout>\d+)')
+
+        current_interface = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # NVI0:
+            m0 = p0.match(line)
+            if m0:
+                current_interface = m0.group('interface')
+                interfaces = result.setdefault('interfaces', {})
+                interfaces[current_interface] = {}
+                continue
+
+            # IPv6 Virtual Fragment Reassembly (IPV6VFR) is ENABLED [out]
+            m1 = p1.match(line)
+            if m1 and current_interface:
+                result['interfaces'][current_interface]['status'] = m1.group('status')
+                result['interfaces'][current_interface]['direction'] = m1.group('direction')
+                continue
+
+            # IPv6 configured concurrent reassemblies (max-reassemblies): 1024
+            m2 = p2.match(line)
+            if m2 and current_interface:
+                result['interfaces'][current_interface]['max_reassemblies'] = int(m2.group('max_reassemblies'))
+                continue
+
+            # IPv6 configured fragments per reassembly (max-fragments): 16
+            m3 = p3.match(line)
+            if m3 and current_interface:
+                result['interfaces'][current_interface]['max_fragments'] = int(m3.group('max_fragments'))
+                continue
+
+            # IPv6 configured reassembly timeout (timeout): 3 seconds
+            m4 = p4.match(line)
+            if m4 and current_interface:
+                result['interfaces'][current_interface]['timeout'] = int(m4.group('timeout'))
+                continue
+
+            # IPv6 configured drop fragments: OFF
+            m5 = p5.match(line)
+            if m5 and current_interface:
+                result['interfaces'][current_interface]['drop_fragments'] = m5.group('drop_fragments')
+                continue
+
+            # IPv6 current reassembly count:0
+            m6 = p6.match(line)
+            if m6 and current_interface:
+                result['interfaces'][current_interface]['current_reassembly_count'] = int(m6.group('current_reassembly'))
+                continue
+
+            # IPv6 current fragment count:0
+            m7 = p7.match(line)
+            if m7 and current_interface:
+                result['interfaces'][current_interface]['current_fragment_count'] = int(m7.group('current_fragment'))
+                continue
+
+            # IPv6 total reassembly count:0
+            m8 = p8.match(line)
+            if m8 and current_interface:
+                result['interfaces'][current_interface]['total_reassembly_count'] = int(m8.group('total_reassembly'))
+                continue
+
+            # IPv6 total reassembly timeout count:0
+            m9 = p9.match(line)
+            if m9 and current_interface:
+                result['interfaces'][current_interface]['total_reassembly_timeout_count'] = int(m9.group('total_timeout'))
+                continue
+
+        return result
+
+
+class ShowIpv6InterfaceBriefSchema(MetaParser):
+    """
+    	Schema for: 
+     		show ipv6 interface brief
+    """
+
+    schema = {
+        "interface": {
+            Any(): {
+                "interface_state": str,
+                "protocol_state": str,
+                "link_local_address": str,
+                "ipv6_addresses": ListOf(str),
+                Optional("unnumbered"): {
+                    "interface_ref": str,
+                },
+            }
+        }
+    }
+
+
+class ShowIpv6InterfaceBrief(ShowIpv6InterfaceBriefSchema):
+    """
+        Parser for: 
+		show ipv6 interface brief
+        show ipv6 interface brief
+		GigabitEthernet0/0/0   [up/up]
+			unassigned
+		GigabitEthernet0/0/1   [up/up]
+			unassigned
+		GigabitEthernet0/0/2   [up/up]
+			unassigned
+		GigabitEthernet0/0/3   [up/up]
+			unassigned
+		GigabitEthernet0/0/4   [up/up]
+			unassigned
+		GigabitEthernet0/0/5   [administratively down/down]
+			unassigned
+		Loopback0              [up/up]
+			unassigned
+		NVI0                   [up/up]
+			FE80::C6B2:39FF:FEFB:DC40
+		Tunnel192              [up/up]
+			unassigned
+    """
+
+    cli_command = "show ipv6 interface brief"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+        ret_dict = {}
+
+        if not output:
+            return ret_dict
+
+        # Match interface line with states
+	# Example: GigabitEthernet0/0/0   [up/up]
+	# Groups:
+	#   intf             -> interface name
+	#   interface_state  -> up/down
+	#   protocol_state   -> up/down
+        p1 = re.compile(r'^(?P<intf>\S+)\s+\[(?P<interface_state>[^/\]]+)\/(?P<protocol_state>[^\]]+)\]$')
+        # Match "unassigned" IPv6 state line
+	# Example:     unassigned
+        p2 = re.compile(r'^\s*unassigned$')
+        # Match IPv6 address line
+	# Example:     FE80::C6B2:39FF:FEFB:DC40
+	# Group:
+	#   ipv6 -> IPv6 address
+        p3 = re.compile(r'^\s*(?P<ipv6>\S+)$')
+        #     unnumbered (TenGigabitEthernet0/0/4)
+        p4 = re.compile(r'^\s*unnumbered +\((?P<interface_ref>[\w\/\.\-]+)\)$')
+
+        current_intf = None
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # GigabitEthernet0/0/0   [up/up]
+            m = p1.match(line)
+            if m:
+                intf = m.groupdict()["intf"]
+                interface_state = m.groupdict()["interface_state"]
+                protocol_state = m.groupdict()["protocol_state"]
+
+                intf_dict = ret_dict.setdefault("interface", {}).setdefault(intf, {})
+                intf_dict["interface_state"] = interface_state
+                intf_dict["protocol_state"] = protocol_state
+                intf_dict["link_local_address"] = ""
+                intf_dict["ipv6_addresses"] = []
+
+                current_intf = intf
+                continue
+
+            #     unassigned
+            m = p2.match(line)
+            if m:
+                # No addresses assigned for current interface
+                continue
+
+            #     unnumbered (TenGigabitEthernet0/0/4)
+            m = p4.match(line)
+            if m and current_intf:
+                interface_ref = m.groupdict()["interface_ref"]
+                ret_dict["interface"][current_intf]["unnumbered"] = {
+                    "interface_ref": Common.convert_intf_name(interface_ref)
+                }
+                continue
+
+            #     FE80::C6B2:39FF:FEFB:DC40
+            m = p3.match(line)
+            if m and current_intf:
+                addr = m.groupdict()["ipv6"]
+                if addr.upper().startswith("FE80::"):
+                    ret_dict["interface"][current_intf]["link_local_address"] = addr
+                else:
+                    ret_dict["interface"][current_intf]["ipv6_addresses"].append(addr)
                 continue
 
         return ret_dict

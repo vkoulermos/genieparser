@@ -1,0 +1,4 @@
+show controller optics 0/0/0/2 observable-info
+Tue Jan 14 21:03:38.702 UTC
+
+Observable information is not available on the port

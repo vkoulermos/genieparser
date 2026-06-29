@@ -1,0 +1,9 @@
+               Secure Mac Address Table
+-------------------------------------------------------------------------------
+Vlan    Mac Address       Type                          Ports   Remaining Age
+                                                                   (mins)
+----    -----------       ----                          -----   -------------
+100     00aa.bbcc.ddee    SecureDynamic                 Fif1/0/19    5 (I)
+-------------------------------------------------------------------------------
+Total Addresses in System (excluding one mac per port)     : 0
+Max Addresses limit in System (excluding one mac per port) : 4096

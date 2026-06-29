@@ -5,12 +5,14 @@
      * show interfaces counters errors
      * show interfaces {interface} counters errors
      * show interface {interface} counters etherchannel
+    * show interfaces {tunnel} counters protocol status
+    * show interfaces {interface} stat
 """
 
 import re
 
 from genie.metaparser import MetaParser
-from genie.metaparser.util.schemaengine import Any, Optional
+from genie.metaparser.util.schemaengine import Any, Optional, ListOf
 from genie.libs.parser.utils.common import Common
 
 
@@ -337,4 +339,148 @@ class ShowInterfacesCountersPort(ShowInterfacesCountersPortSchema):
                 )
                 continue
         
+        return ret_dict
+
+class ShowInterfacesTunnelCountersProtocolStatusSchema(MetaParser):
+    """Schema for show interfaces {tunnel} counters protocol status"""
+    schema = {
+        "interfaces": {
+            Any(): {
+                "protocols_allocated": ListOf(str)
+            }
+        }
+    }
+
+class ShowInterfacesTunnelCountersProtocolStatus(ShowInterfacesTunnelCountersProtocolStatusSchema):
+    """Parser for show interfaces {tunnel} counters protocol status"""
+    cli_command = "show interfaces {tunnel} counters protocol status"
+
+    def cli(self, tunnel=None, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command.format(tunnel=tunnel))
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        # Tunnel1: Other, IP, IPv6
+        # Exclude the header line: "Protocols allocated:"
+        p1 = re.compile(
+            r"^\s*(?!Protocols\s+allocated\s*:)(?P<intf>\S+)\s*:\s*(?P<protocols>.+?)\s*$",
+            re.IGNORECASE,
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            m = p1.match(line)
+            if not m:
+                continue
+
+            group = m.groupdict()
+            intf = group["intf"]
+            protocols = [p.strip() for p in group["protocols"].split(",") if p.strip()]
+
+            interfaces_dict = ret_dict.setdefault("interfaces", {}).setdefault(intf, {})
+            interfaces_dict.update({"protocols_allocated": protocols})
+
+        return ret_dict
+
+
+class ShowInterfacesInterfaceStatSchema(MetaParser):
+    """Schema for show interfaces {interface} stat"""
+
+    schema = {
+        "interface": {
+            Any(): {
+                "switching_path": {
+                    "processor": {
+                        "pkts_in": int,
+                        "chars_in": int,
+                        "pkts_out": int,
+                        "chars_out": int
+                    },
+                    "route_cache": {
+                        "pkts_in": int,
+                        "chars_in": int,
+                        "pkts_out": int,
+                        "chars_out": int
+                    },
+                    "distributed_cache": {
+                        "pkts_in": int,
+                        "chars_in": int,
+                        "pkts_out": int,
+                        "chars_out": int
+                    },
+                    "total": {
+                        "pkts_in": int,
+                        "chars_in": int,
+                        "pkts_out": int,
+                        "chars_out": int
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowInterfacesInterfaceStat(ShowInterfacesInterfaceStatSchema):
+    """Parser for show interfaces {interface} stat"""
+
+    cli_command = "show interfaces {interface} stat"
+
+    def cli(self, interface=None, output=None):
+        if output is None:
+            cmd = self.cli_command.format(interface=interface)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        interface_key = "{interface}" if interface is None else interface
+        interface_dict = ret_dict.setdefault("interface", {}).setdefault(interface_key, {})
+
+        #           Switching path    Pkts In   Chars In   Pkts Out  Chars Out
+        p1 = re.compile(r"^\s*Switching\s+path\s+Pkts\s+In\s+Chars\s+In\s+Pkts\s+Out\s+Chars\s+Out$")
+
+        #                Processor       1773    1168407          0          0
+        p2 = re.compile(r"^\s*(?P<path>Processor|Route cache|Distributed cache|Total)\s+"
+                        r"(?P<pkts_in>\d+)\s+(?P<chars_in>\d+)\s+(?P<pkts_out>\d+)\s+(?P<chars_out>\d+)$")
+
+        switching_dict = None
+        path_map = {
+            "Processor": "processor",
+            "Route cache": "route_cache",
+            "Distributed cache": "distributed_cache",
+            "Total": "total",
+        }
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            #           Switching path    Pkts In   Chars In   Pkts Out  Chars Out
+            m = p1.match(line)
+            if m:
+                switching_dict = interface_dict.setdefault("switching_path", {})
+                continue
+
+            #                Processor       1773    1168407          0          0
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                if switching_dict is None:
+                    switching_dict = interface_dict.setdefault("switching_path", {})
+                section = path_map.get(group["path"])
+                sec_dict = switching_dict.setdefault(section, {})
+                sec_dict["pkts_in"] = int(group["pkts_in"])
+                sec_dict["chars_in"] = int(group["chars_in"])
+                sec_dict["pkts_out"] = int(group["pkts_out"])
+                sec_dict["chars_out"] = int(group["chars_out"])
+                continue
+
         return ret_dict

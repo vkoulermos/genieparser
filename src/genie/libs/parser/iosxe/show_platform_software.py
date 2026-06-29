@@ -62,6 +62,13 @@
     * 'show platform software audit monitor status'
     * 'show platform software audit ruleset'
     * show platform software firewall qfp active runtime
+    * show platform software ip FP active cef summary
+    * show platform software adjacency nexthop-ipfrr
+    * show platform software adj fp active
+    * 'show platform software selinux'
+    * show platform software access-list RP active statistics
+    * show platform software ess FP active drl
+    * show platform software ess fp active l4r
 """
 
 # Python
@@ -552,7 +559,84 @@ class ShowPlatformSoftwareYangManagementProcessMonitor(
 
         return ret_dict
 
+# Show Platform Software Selinux
+class ShowPlatformSoftwareSelinuxSchema(MetaParser):
+    """Schema for 'show platform software selinux'"""
 
+    schema = {
+        'selinux_status': {
+            Any(): {  # location: e.g., "ACTIVE" or "chassis 1 route-processor 0"
+                'status': str,
+                'current_mode': str,
+                'system_default': str,
+            }
+        }
+    }
+
+
+class ShowPlatformSoftwareSelinux(ShowPlatformSoftwareSelinuxSchema):
+    """Parser for 'show platform software selinux'"""
+
+    cli_command = 'show platform software selinux'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        # Initialize parsed dictionary
+        ret_dict = {}
+
+        # Current location being parsed
+        current_location = None
+
+        # SELINUX STATUS ON ACTIVE
+        # SELINUX STATUS ON chassis 1 route-processor 0
+        p1 = re.compile(r'^SELINUX\s+STATUS\s+ON\s+(?P<location>.+)$')
+
+        # SElinux Status   : Enabled
+        p2 = re.compile(r'^SElinux\s+Status\s*:\s*(?P<status>\w+)$')
+
+        # Current Mode     : Enforcing
+        # Current Mode     : Permissive
+        p3 = re.compile(r'^Current\s+Mode\s*:\s*(?P<current_mode>\w+)$')
+
+        # System Default   : Enforcing
+        p4 = re.compile(r'^System\s+Default\s*:\s*(?P<system_default>\w+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # Skip separator lines
+            if line.startswith('===') or line.startswith('---'):
+                continue
+
+            # SELINUX STATUS ON ACTIVE
+            # SELINUX STATUS ON chassis 1 route-processor 0
+            m = p1.match(line)
+            if m:
+                current_location = m.groupdict()['location']
+                ret_dict.setdefault('selinux_status', {}).setdefault(current_location, {})
+                continue
+
+            # SElinux Status   : Enabled
+            m = p2.match(line)
+            if m and current_location:
+                ret_dict['selinux_status'][current_location]['status'] = m.groupdict()['status']
+                continue
+
+            # Current Mode     : Enforcing
+            m = p3.match(line)
+            if m and current_location:
+                ret_dict['selinux_status'][current_location]['current_mode'] = m.groupdict()['current_mode']
+                continue
+
+            # System Default   : Enforcing
+            m = p4.match(line)
+            if m and current_location:
+                ret_dict['selinux_status'][current_location]['system_default'] = m.groupdict()['system_default']
+                continue
+
+        return ret_dict
 class ShowPlatformSoftwareYangManagementProcessStateSchema(MetaParser):
     """schema for
     * show platform software yang-management process state
@@ -10934,24 +11018,42 @@ class ShowPlatformSoftwareInterfaceFpActiveSchema(MetaParser):
         'mtu': int,
         Optional('ip_address'): str,
         Optional('ipv6_address'): str,
+        Optional('vfr_egress'): {
+            'vfr_enabled': int,
+            'max_reassemblies': int,
+            'max_fragments': int,
+            'vfr_timeout': int,
+            'drop_fragments': int,
+            'dscp_bitmap': str,
+            'percentage': int
+        },
+        Optional('ipv6_vfr_egress'): {
+            'vfr_enabled': int,
+            'max_reassemblies': int,
+            'max_fragments': int,
+            'vfr_timeout': int,
+            'drop_fragments': int,
+            'dscp_bitmap': str,
+            'percentage': int
+        },
         'flags': ListOf(str),
         'icmp_flags': ListOf(str),
         'icmp6_flags': ListOf(str),
         'smi_protocols': ListOf(str),
         Optional('authenticated_user'): str,
         'frr_linkdown_id': int,
-        'vnet_name': str,
+        Optional('vnet_name'): str,
         'vnet_tag': int,
         'vnet_extra_info': int,
         'dirty': str,
         'aom_dependency_sanity_check': str,
         'aom_obj_id': int,
-        'ether_channel_id': int,
-        'load_balancing_method': str,
-        'number_of_member_links': int,
-        'members': ListOf(str),
-        'number_of_buckets': int,
-        'buckets': ListOf({
+        Optional('ether_channel_id'): int,
+        Optional('load_balancing_method'): str,
+        Optional('number_of_member_links'): int,
+        Optional('members'): ListOf(str),
+        Optional('number_of_buckets'): int,
+        Optional('buckets'): ListOf({
             'id': int,
             'link': str
         })
@@ -10986,11 +11088,26 @@ class ShowPlatformSoftwareInterfaceFpActive(ShowPlatformSoftwareInterfaceFpActiv
         # ICMP6 Flags: Disabled
         p7 = re.compile(r'^ICMP6 Flags: +(?P<icmp6_flags>[\S\s]+)$')
 
+        # VFR EGRESS:
+        p20 = re.compile(r'^VFR EGRESS:$')
+
+        # IPv6 VFR EGRESS:
+        p21 = re.compile(r'^IPv6 VFR EGRESS:$')
+
+        # VFR enabled: 1, Max reassemblies: 1024, Max fragments: 32
+        p22 = re.compile(r'^VFR enabled: +(?P<vfr_enabled>\d+), +Max reassemblies: +(?P<max_reassemblies>\d+), +Max fragments: +(?P<max_fragments>\d+)$')
+
+        # VFR timeout: 3, Drop Fragments: 0
+        p23 = re.compile(r'^VFR timeout: +(?P<vfr_timeout>\d+), +Drop Fragments: +(?P<drop_fragments>\d+)$')
+
+        # Dscp bitmap: 0x0000000000000000, Percentage: 0
+        p24 = re.compile(r'^Dscp bitmap: +(?P<dscp_bitmap>0x[0-9a-fA-F]+), +Percentage: +(?P<percentage>\d+)$')
+
         # SMI enabled on protocol(s): ARP, IP, MPLS
         p8 = re.compile(r'^SMI enabled on protocol\(s\): +(?P<smi_protocols>[\S\s]+)$')
 
         # Authenticated-user: admin
-        p9 = re.compile(r'^Authenticated-user: +(?P<authenticated_user>.*)$')
+        p9 = re.compile(r'^Authenticated-user: *(?P<authenticated_user>.*)$')
 
         # FRR linkdown ID: 300
         p10 = re.compile(r'^FRR linkdown ID: +(?P<frr_linkdown_id>\d+)$')
@@ -11024,8 +11141,21 @@ class ShowPlatformSoftwareInterfaceFpActive(ShowPlatformSoftwareInterfaceFpActiv
 
 
         # Parse each line of the output
+        current_vfr_section = None  # Track which VFR section we're in
+        
         for line in output.splitlines():
             line = line.strip()
+
+            # Check for VFR section headers
+            m = p20.match(line)
+            if m:
+                current_vfr_section = 'vfr_egress'
+                continue
+
+            m = p21.match(line)
+            if m:
+                current_vfr_section = 'ipv6_vfr_egress'
+                continue
 
             # Name: Te0/0/0, ID: 5, QFP ID: 1, Schedules: 2
             m = p1.match(line)
@@ -11059,34 +11189,79 @@ class ShowPlatformSoftwareInterfaceFpActive(ShowPlatformSoftwareInterfaceFpActiv
                 parsed_dict['ipv6_address'] = m.group('ipv6_address')
                 continue
 
+            # VFR enabled: 1, Max reassemblies: 1024, Max fragments: 32
+            m = p22.match(line)
+            if m and current_vfr_section:
+                group = m.groupdict()
+                parsed_dict.setdefault(current_vfr_section, {})
+                parsed_dict[current_vfr_section]['vfr_enabled'] = int(group['vfr_enabled'])
+                parsed_dict[current_vfr_section]['max_reassemblies'] = int(group['max_reassemblies'])
+                parsed_dict[current_vfr_section]['max_fragments'] = int(group['max_fragments'])
+                continue
+
+            # VFR timeout: 3, Drop Fragments: 0
+            m = p23.match(line)
+            if m and current_vfr_section:
+                group = m.groupdict()
+                parsed_dict[current_vfr_section]['vfr_timeout'] = int(group['vfr_timeout'])
+                parsed_dict[current_vfr_section]['drop_fragments'] = int(group['drop_fragments'])
+                continue
+
+            # Dscp bitmap: 0x0000000000000000, Percentage: 0
+            m = p24.match(line)
+            if m and current_vfr_section:
+                group = m.groupdict()
+                parsed_dict[current_vfr_section]['dscp_bitmap'] = group['dscp_bitmap']
+                parsed_dict[current_vfr_section]['percentage'] = int(group['percentage'])
+                current_vfr_section = None  # Reset after completing a VFR section
+                continue
+
             # Flags: Up Broadcast Runnings
             m = p5.match(line)
             if m:
-                parsed_dict['flags'] = m.group('flags').split(', ')
+                flags_text = m.group('flags').strip()
+                if ', ' in flags_text:
+                    parsed_dict['flags'] = flags_text.split(', ')
+                else:
+                    parsed_dict['flags'] = flags_text.split()
                 continue
 
             # ICMP Flags: Enabled
             m = p6.match(line)
             if m:
-                parsed_dict['icmp_flags'] = m.group('icmp_flags').split(', ')
+                icmp_flags_text = m.group('icmp_flags').strip()
+                if ', ' in icmp_flags_text:
+                    parsed_dict['icmp_flags'] = icmp_flags_text.split(', ')
+                else:
+                    parsed_dict['icmp_flags'] = icmp_flags_text.split()
                 continue
 
             # ICMP6 Flags: Disabled
             m = p7.match(line)
             if m:
-                parsed_dict['icmp6_flags'] = m.group('icmp6_flags').split(', ')
+                icmp6_flags_text = m.group('icmp6_flags').strip()
+                if ', ' in icmp6_flags_text:
+                    parsed_dict['icmp6_flags'] = icmp6_flags_text.split(', ')
+                else:
+                    parsed_dict['icmp6_flags'] = icmp6_flags_text.split()
                 continue
 
             # SMI enabled on protocol(s): ARP, IP, MPLS
             m = p8.match(line)
             if m:
-                parsed_dict['smi_protocols'] = m.group('smi_protocols').split(', ')
+                smi_protocols_text = m.group('smi_protocols').strip()
+                if ', ' in smi_protocols_text:
+                    parsed_dict['smi_protocols'] = smi_protocols_text.split(', ')
+                else:
+                    parsed_dict['smi_protocols'] = smi_protocols_text.split()
                 continue
 
             # Authenticated-user: admin
             m = p9.match(line)
             if m:
-                parsed_dict['authenticated_user'] = m.group('authenticated_user').strip()
+                auth_user = m.group('authenticated_user').strip()
+                if auth_user:  # Only include if not empty
+                    parsed_dict['authenticated_user'] = auth_user
                 continue
 
             # FRR linkdown ID: 300
@@ -11099,7 +11274,9 @@ class ShowPlatformSoftwareInterfaceFpActive(ShowPlatformSoftwareInterfaceFpActiv
             m = p11.match(line)
             if m:
                 group = m.groupdict()
-                parsed_dict['vnet_name'] = group['vnet_name'].strip()
+                vnet_name = group['vnet_name'].strip()
+                if vnet_name:  # Only include if not empty
+                    parsed_dict['vnet_name'] = vnet_name
                 parsed_dict['vnet_tag'] = int(group['vnet_tag'])
                 parsed_dict['vnet_extra_info'] = int(group['vnet_extra_info'])
                 continue
@@ -11139,7 +11316,11 @@ class ShowPlatformSoftwareInterfaceFpActive(ShowPlatformSoftwareInterfaceFpActiv
             # Members: Te0/0/0, Te0/0/1
             m = p17.match(line)
             if m:
-                parsed_dict['members'] = m.group('members').split(', ')
+                members_text = m.group('members').strip()
+                if ', ' in members_text:
+                    parsed_dict['members'] = members_text.split(', ')
+                else:
+                    parsed_dict['members'] = members_text.split()
                 continue
 
             # Number of buckets: 256
@@ -13360,6 +13541,96 @@ class ShowPlatformSoftwareNatFpActiveCppStats(ShowPlatformSoftwareNatFpActiveCpp
         return parsed_dict
 
 # =======================================================
+# Schema for 'show platform software nat fp active translation'
+# =======================================================
+class ShowPlatformSoftwareNatFpActiveTranslationSchema(MetaParser):
+    """Schema for show platform software nat fp active translation"""
+    schema = {
+        Optional('translations'): {
+            Any(): {  # protocol (udp, tcp, icmp)
+                'inside_global': str,
+                'inside_local': str,
+                'outside_local': str,
+                'outside_global': str,
+            }
+        },
+        'total_number_of_translations': int,
+    }
+
+# =======================================================
+# Parser for 'show platform software nat fp active translation'
+# =======================================================
+class ShowPlatformSoftwareNatFpActiveTranslation(ShowPlatformSoftwareNatFpActiveTranslationSchema):
+    """Parser for show platform software nat fp active translation"""
+
+    cli_command = 'show platform software nat fp active translation'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        # Initial return dictionary
+        ret_dict = {}
+
+        # Pro  Inside global         Inside local          Outside local         Outside global
+        # udp  110.100.1.1:49186     5.0.0.2:49186         110.1.1.1:33438       110.1.1.1:33438
+        # tcp  120.100.1.1:60371     5.0.0.2:60371         120.1.1.1:23          120.1.1.1:23
+        # icmp 120.100.1.1:8         5.0.0.2:8             120.1.1.1:8           120.1.1.8
+        p1 = re.compile(r'^(?P<protocol>\w+)\s+(?P<inside_global>\S+)\s+(?P<inside_local>\S+)\s+(?P<outside_local>\S+)\s+(?P<outside_global>\S+)$')
+
+        # Total number of translations: 8
+        p2 = re.compile(r'^Total\s+number\s+of\s+translations:\s+(?P<total>\d+)$')
+
+        translation_count = 1
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # Skip empty lines
+            if not line:
+                continue
+
+            # Pro  Inside global         Inside local          Outside local         Outside global
+            if line.startswith('Pro') and 'Inside global' in line:
+                continue
+
+            # Total number of translations: 8
+            match = p2.match(line)
+            if match:
+                total_translations = int(match.group('total'))
+                ret_dict['total_number_of_translations'] = total_translations
+                continue
+
+            # udp  110.100.1.1:49186     5.0.0.2:49186         110.1.1.1:33438       110.1.1.1:33438
+            # tcp  120.100.1.1:60371     5.0.0.2:60371         120.1.1.1:23          120.1.1.1:23
+            # icmp 120.100.1.1:8         5.0.0.2:8             120.1.1.1:8           120.1.1.8
+            # Only match lines that don't start with "Total"
+            if not line.startswith('Total'):
+                match = p1.match(line)
+                if match:
+                    protocol = match.group('protocol')
+                    inside_global = match.group('inside_global')
+                    inside_local = match.group('inside_local')
+                    outside_local = match.group('outside_local')
+                    outside_global = match.group('outside_global')
+
+                    # Create a unique key for each translation entry
+                    translation_key = f"{protocol}_{translation_count}"
+                    
+                    translation_dict = ret_dict.setdefault('translations', {})
+                    translation_dict[translation_key] = {
+                        'inside_global': inside_global,
+                        'inside_local': inside_local,
+                        'outside_local': outside_local,
+                        'outside_global': outside_global,
+                    }
+                    
+                    translation_count += 1
+                    continue
+
+        return ret_dict
+
+# =======================================================
 # Schema for 'show platform software firewall RP active parameter-maps'
 # =======================================================
 class ShowPlatformSoftwareFirewallRPActiveParameterMapsSchema(MetaParser):
@@ -14619,46 +14890,100 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMapsSchema(MetaParser):
                 'name': str,
                 'index': int,
                 'type': str,
-                'global_parameter_map': bool,
-                'alerts': str,
-                'audits': str,
-                'drop_log': str,
-                'hsl_mode': str,
-                'host': str,
-                'port': int,
-                'template': str,
-                'session_rate_high': int,
-                'session_rate_low': int,
-                'time_duration': str,
-                'half_open': {
-                    'high': int,
-                    'low': int,
-                    'host': int,
-                    'host_block_time': int,
+                Optional('global_parameter_map'): bool,
+                Optional('alerts'): str,
+                Optional('audits'): str,
+                Optional('drop_log'): str,
+                Optional('log_flow'): str,
+                Optional('hsl_mode'): str,
+                Optional('host'): str,
+                Optional('port'): int,
+                Optional('template'): str,
+                Optional('session_rate_high'): int,
+                Optional('session_rate_low'): int,
+                Optional('time_duration'): str,
+                Optional('half_open'): {
+                    Optional('high'): int,
+                    Optional('low'): int,
+                    Optional('host'): int,
+                    Optional('host_block_time'): int,
                 },
-                'inactivity_times': {
-                    'dns': int,
-                    'icmp': int,
-                    'tcp': int,
-                    'udp': int,
+                Optional('inactivity_times'): {
+                    Optional('dns'): int,
+                    Optional('icmp'): int,
+                    Optional('tcp'): int,
+                    Optional('udp'): int,
                 },
-                'tcp_timeouts': {
-                    'syn_wait_time': int,
-                    'fin_wait_time': int,
+                Optional('inactivity_age_out_times'): {
+                    Optional('icmp'): int,
+                    Optional('tcp'): int,
+                    Optional('udp'): int,
                 },
-                'tcp_rst_pkt_control': {
-                    'half_open': str,
-                    'half_close': str,
-                    'idle': str,
+                Optional('tcp_timeouts'): {
+                    Optional('syn_wait_time'): int,
+                    Optional('fin_wait_time'): int,
                 },
-                'udp_timeout': {
-                    'udp_half_open_time': int,
+                Optional('tcp_ageout_timeouts'): {
+                    Optional('syn_wait_time'): int,
+                    Optional('fin_wait_time'): int,
                 },
-                'max_sessions': str,
-                'number_of_simultaneous_packet_per_sessions': int,
-                'syn_cookie_and_resource_management': {
-                    'global_syn_flood_limit': int,
-                    'global_total_session': int,
+                Optional('tcp_rst_pkt_control'): {
+                    Optional('half_open'): str,
+                    Optional('half_close'): str,
+                    Optional('idle'): str,
+                },
+                Optional('udp_timeout'): {
+                    Optional('udp_half_open_time'): int,
+                },
+                Optional('udp_ageout_timeout'): {
+                    Optional('udp_half_open_time'): int,
+                },
+                Optional('max_sessions'): str,
+                Optional('number_of_simultaneous_packet_per_sessions'): int,
+                Optional('syn_cookie_and_resource_management'): {
+                    Optional('global_syn_flood_limit'): int,
+                    Optional('global_total_session'): int,
+                    Optional('global_number_of_simultaneous_packet_per_session'): str,
+                    Optional('global_total_session_aggressive_aging'): str,
+                    Optional('global_alert'): str,
+                    Optional('global_max_incomplete'): int,
+                    Optional('global_max_incomplete_tcp'): int,
+                    Optional('global_max_incomplete_udp'): int,
+                    Optional('global_max_incomplete_icmp'): int,
+                    Optional('global_max_incomplete_aggressive_aging'): str,
+                    Optional('per_box_syn_flood_limit'): int,
+                    Optional('per_box_total_session_aggressive_aging'): str,
+                    Optional('per_box_max_incomplete'): int,
+                    Optional('per_box_max_incomplete_tcp'): int,
+                    Optional('per_box_max_incomplete_udp'): int,
+                    Optional('per_box_max_incomplete_icmp'): int,
+                    Optional('per_box_max_incomplete_aggressive_aging'): str,
+                },
+                Optional('vrf_pmap_syn_flood_limit'): int,
+                Optional('vrf_pmap_total_session'): int,
+                Optional('vrf_pmap_total_session_aggressive_aging'): str,
+                Optional('vrf_pmap_alert'): str,
+                Optional('vrf_pmap_max_incomplete'): int,
+                Optional('vrf_pmap_max_incomplete_tcp'): int,
+                Optional('vrf_pmap_max_incomplete_udp'): int,
+                Optional('vrf_pmap_max_incomplete_icmp'): int,
+                Optional('vrf_pmap_max_incomplete_aggressive_aging'): str,
+                Optional('zone_mismatch_drop'): str,
+                Optional('icmp_unreachable_allowed'): str,
+                Optional('session_reclassify_allowed'): str,
+                Optional('vpn_zone_security'): str,
+                Optional('vpn_zone_allow_dia'): str,
+                Optional('hsl_template_timeout'): int,
+                Optional('inspect_global_syn_flood_limit'): int,
+                Optional('inspect_global_total_session_aggressive_aging'): str,
+                Optional('inspect_global_max_incomplete'): int,
+                Optional('inspect_global_max_incomplete_tcp'): int,
+                Optional('inspect_global_max_incomplete_udp'): int,
+                Optional('inspect_global_max_incomplete_icmp'): int,
+                Optional('inspect_global_max_incomplete_aggressive_aging'): str,
+                Optional('tcp_winscale_loose'): str,
+                Optional('application_protocol_control'): {
+                    Any(): str
                 },
             }
         }
@@ -14677,19 +15002,22 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
         # Initialize return dictionary
         ret_dict = {}
 
-        # Inspect Parameter Map: global, Index 1
-        p1 = re.compile(r'^Inspect Parameter Map: (?P<name>\S+), Index (?P<index>\d+)$')
+        # Inspect Parameter Map: global, Index 1 OR VRF Parameter Map: vrf-default, Index 2
+        p1 = re.compile(r'^(?:Inspect|VRF) Parameter Map: (?P<name>\S+), Index (?P<index>\d+)$')
 
         # Parameter Map Type: Parameter-Map
         p2 = re.compile(r'^Parameter Map Type: (?P<type>[\S\s]+)$')
 
         # Global Parameter-Map
-        p3 = re.compile(r'^Global Parameter-Map$')
+        p3 = re.compile(r'^Global Parameter-Map$|^(?P<pmap_name>[\w-]+) Parameter-Map$')
 
-        # Alerts: On, Audits: Off, Drop-Log: Off
-        p4 = re.compile(r'^Alerts: (?P<alerts>\S+), Audits: (?P<audits>\S+), Drop-Log: (?P<drop_log>\S+)$')
+        # Alerts: On, Audits: Off, Drop-Log: Off, Log flow: Off
+        p4 = re.compile(r'^Alerts: (?P<alerts>\S+), Audits: (?P<audits>\S+), Drop-Log: (?P<drop_log>\S+)(?:, Log flow: (?P<log_flow>\S+))?$')
 
-        # HSL Mode: V9, Host: 10.1.1.1:9000, Port: 54174, Template: 300 sec
+        # Alerts: On, Drop-Log: On (without Audits field)
+        p4_alt = re.compile(r'^Alerts: (?P<alerts>\S+), Drop-Log: (?P<drop_log>\S+)$')
+
+        # HSL Mode: Disabled, Host: 0.0.0.0:0, Port: 0, Template: 300 sec
         p5 = re.compile(r'^HSL Mode: (?P<hsl_mode>\S+), Host: (?P<host>\S+), Port: (?P<port>\d+), Template: (?P<template>[\d\s\w]+)$')
 
         # Session Rate High: 2147483647, Session Rate Low: 2147483647, Time Duration: 60 sec
@@ -14698,8 +15026,11 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
         # High: 2147483647, Low: 2147483647, Host: 4294967295, Host Block Time: 0
         p7 = re.compile(r'^High: (?P<high>\d+), Low: (?P<low>\d+), Host: (?P<host_val>\d+), Host Block Time: (?P<host_block_time>\d+)$')
 
-        # DNS: 5, ICMP: 10, TCP: 3600, UDP: 30
+        # DNS: 5, ICMP: 10, TCP: 3600, UDP: 30 (Inactivity Times)
         p8 = re.compile(r'^DNS: (?P<dns>\d+), ICMP: (?P<icmp>\d+), TCP: (?P<tcp>\d+), UDP: (?P<udp>\d+)$')
+
+        # ICMP: 10, TCP: 3600, UDP: 30 (Inactivity Age-out Times)
+        p8_ageout = re.compile(r'^ICMP: (?P<icmp>\d+), TCP: (?P<tcp>\d+), UDP: (?P<udp>\d+)$')
 
         # SYN wait time: 30, FIN wait time: 1
         p9 = re.compile(r'^SYN wait time: (?P<syn_wait_time>\d+), FIN wait time: (?P<fin_wait_time>\d+)$')
@@ -14708,13 +15039,13 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
         p10 = re.compile(r'^half-open: (?P<half_open>\S+), half-close: (?P<half_close>\S+), idle: (?P<idle>\S+)$')
 
         # UDP Half-open time: 30000
-        p11 = re.compile(r'^UDP Half-open time: (?P<udp_half_open_time>\d+)$')
+        p11 = re.compile(r'^\s*UDP Half-open time: (?P<udp_half_open_time>\d+)$')
 
         # Max Sessions: Unlimited
         p12 = re.compile(r'^Max Sessions: (?P<max_sessions>\S+)$')
 
         # Number of Simultaneous Packet per Sessions: 0
-        p13 = re.compile(r'^Number of Simultaneous Packet per Sessions: (?P<number_of_simultaneous_packet_per_sessions>\d+)$')
+        p13 = re.compile(r'^\s*Number of Simultaneous Packet per Sessions:\s*(?P<number_of_simultaneous_packet_per_sessions>\d+)$')
 
         # Global Syn Flood Limit: 4294967295
         p14 = re.compile(r'^Global Syn Flood Limit: (?P<global_syn_flood_limit>\d+)$')
@@ -14722,10 +15053,126 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
         # Global Total Session : 4294967295
         p15 = re.compile(r'^Global Total Session\s*:\s*(?P<global_total_session>\d+)$')
 
+        # Global Number of Simultaneous Packet per Session :
+        p16 = re.compile(r'^Global Number of Simultaneous Packet per Session\s*:$')
+
+        # Global Total Session Aggressive Aging Disabled
+        p17 = re.compile(r'^Global Total Session Aggressive Aging (?P<status>\w+)$')
+
+        # Global alert : Off
+        p18 = re.compile(r'^Global alert\s*:\s*(?P<global_alert>\S+)$')
+
+        # Global max incomplete : 4294967295
+        p19 = re.compile(r'^Global max incomplete\s*:\s*(?P<global_max_incomplete>\d+)$')
+
+        # Global max incomplete TCP: 4294967295
+        p20 = re.compile(r'^Global max incomplete TCP:\s*(?P<global_max_incomplete_tcp>\d+)$')
+
+        # Global max incomplete UDP: 4294967295
+        p21 = re.compile(r'^Global max incomplete UDP:\s*(?P<global_max_incomplete_udp>\d+)$')
+
+        # Global max incomplete ICMP: 4294967295
+        p22 = re.compile(r'^Global max incomplete ICMP:\s*(?P<global_max_incomplete_icmp>\d+)$')
+
+        # Global max incomplete Aggressive Aging Disabled
+        p23 = re.compile(r'^Global max incomplete Aggressive Aging (?P<status>\w+)$')
+
+        # syn flood limit : 4294967295
+        p24 = re.compile(r'^syn flood limit\s*:\s*(?P<syn_flood_limit>\d+)$')
+
+        # Total Session Aggressive Aging Disabled
+        p25 = re.compile(r'^Total Session Aggressive Aging (?P<status>\w+)$')
+
+        # max incomplete : 4294967295
+        p26 = re.compile(r'^max incomplete\s*:\s*(?P<max_incomplete>\d+)$')
+
+        # max incomplete TCP: 4294967295
+        p27 = re.compile(r'^max incomplete TCP:\s*(?P<max_incomplete_tcp>\d+)$')
+
+        # max incomplete UDP: 4294967295
+        p28 = re.compile(r'^max incomplete UDP:\s*(?P<max_incomplete_udp>\d+)$')
+
+        # max incomplete ICMP: 4294967295
+        p29 = re.compile(r'^max incomplete ICMP:\s*(?P<max_incomplete_icmp>\d+)$')
+
+        # max incomplete Aggressive Aging Disabled
+        p30 = re.compile(r'^max incomplete Aggressive Aging (?P<status>\w+)$')
+
+        # VRF PMAP syn flood limit : 4294967295
+        p31 = re.compile(r'^VRF PMAP syn flood limit\s*:\s*(?P<vrf_pmap_syn_flood_limit>\d+)$')
+
+        # VRF PMAP total session : 4294967295
+        p32 = re.compile(r'^VRF PMAP total session\s*:\s*(?P<vrf_pmap_total_session>\d+)$')
+
+        # VRF PMAP total session Aggressive Aging Disabled
+        p33 = re.compile(r'^VRF PMAP total session Aggressive Aging (?P<vrf_pmap_total_session_aggressive_aging>\w+)$')
+
+        # VRF PMAP alert : Off
+        p34 = re.compile(r'^VRF PMAP alert\s*:\s*(?P<vrf_pmap_alert>\S+)$')
+
+        # VRF PMAP max incomplete : 4294967295
+        p35 = re.compile(r'^VRF PMAP max incomplete\s*:\s*(?P<vrf_pmap_max_incomplete>\d+)$')
+
+        # VRF PMAP max incomplete TCP: 4294967295
+        p36 = re.compile(r'^VRF PMAP max incomplete TCP:\s*(?P<vrf_pmap_max_incomplete_tcp>\d+)$')
+
+        # VRF PMAP max incomplete UDP: 4294967295
+        p37 = re.compile(r'^VRF PMAP max incomplete UDP:\s*(?P<vrf_pmap_max_incomplete_udp>\d+)$')
+
+        # VRF PMAP max incomplete ICMP: 4294967295
+        p38 = re.compile(r'^VRF PMAP max incomplete ICMP:\s*(?P<vrf_pmap_max_incomplete_icmp>\d+)$')
+
+        # VRF PMAP max incomplete Aggressive Aging Disabled
+        p39 = re.compile(r'^VRF PMAP max incomplete Aggressive Aging (?P<vrf_pmap_max_incomplete_aggressive_aging>\w+)$')
+
+        # Zone mismatch drop: Off
+        p40 = re.compile(r'^Zone mismatch drop:\s*(?P<zone_mismatch_drop>\S+)$')
+
+        # ICMP unreachable allowed: No
+        p41 = re.compile(r'^ICMP unreachable allowed:\s*(?P<icmp_unreachable_allowed>\S+)$')
+
+        # Session reclassify allowed: No
+        p42 = re.compile(r'^Session reclassify allowed:\s*(?P<session_reclassify_allowed>\S+)$')
+
+        # vpn zone security: Off
+        p43 = re.compile(r'^vpn zone security:\s*(?P<vpn_zone_security>\S+)$')
+
+        # vpn zone allow dia: Off
+        p44 = re.compile(r'^vpn zone allow dia:\s*(?P<vpn_zone_allow_dia>\S+)$')
+
+        # HSL Template Timeout [sec]: 300
+        p45 = re.compile(r'^HSL Template Timeout \[sec\]:\s*(?P<hsl_template_timeout>\d+)$')
+
+        # tcp winscale loose: Off
+        p46 = re.compile(r'^tcp winscale loose:\s*(?P<tcp_winscale_loose>\S+)$')
+
+        # Application protocol control: (start of table)
+        p47 = re.compile(r'^Application protocol control:$')
+
+        # Protocol         Status
+        p48 = re.compile(r'^Protocol\s+Status$')
+
+        # dns              on  OR  DNS: on
+        p49 = re.compile(r'^(?P<protocol>\S+?)\:?\s+(?P<status>\S+)$')
+
         current_param_map = None
+        in_half_open_section = False
+        in_inactivity_section = False
+        in_inactivity_ageout_section = False
+        in_tcp_timeouts_section = False
+        in_tcp_ageout_timeouts_section = False
+        in_udp_timeout_section = False
+        in_udp_ageout_timeout_section = False
+        in_per_box_section = False
+        in_application_protocol_section = False
+        in_syn_cookie_section = False
 
         for line in output.splitlines():
             line = line.strip()
+
+            # Skip empty lines and section headers
+            if not line or 'Forwarding Manager Inspect Parameter-Maps' in line or line.startswith('-----'):
+                continue
 
             # Inspect Parameter Map: global, Index 1
             m = p1.match(line)
@@ -14735,6 +15182,20 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
                 current_param_map = ret_dict.setdefault('parameter_maps', {}).setdefault(name, {})
                 current_param_map['name'] = name
                 current_param_map['index'] = int(group['index'])
+                # Reset section flags
+                in_half_open_section = False
+                in_inactivity_section = False
+                in_inactivity_ageout_section = False
+                in_tcp_timeouts_section = False
+                in_tcp_ageout_timeouts_section = False
+                in_udp_timeout_section = False
+                in_udp_ageout_timeout_section = False
+                in_per_box_section = False
+                in_application_protocol_section = False
+                in_syn_cookie_section = False
+                continue
+
+            if current_param_map is None:
                 continue
 
             # Parameter Map Type: Parameter-Map
@@ -14744,22 +15205,69 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
                 current_param_map['type'] = group['type']
                 continue
 
-            # Global Parameter-Map
+            # Global Parameter-Map or inspect-global Parameter-Map
             m = p3.match(line)
             if m:
-                current_param_map['global_parameter_map'] = True
+                if 'Global Parameter-Map' in line:
+                    current_param_map['global_parameter_map'] = True
                 continue
 
-            # Alerts: On, Audits: Off, Drop-Log: Off
+            # Section headers
+            if 'Half-Open:' in line:
+                in_half_open_section = True
+                continue
+            elif 'Inactivity Times [sec]:' in line:
+                in_inactivity_section = True
+                continue
+            elif 'Inactivity Age-out Times [sec]:' in line:
+                in_inactivity_ageout_section = True
+                continue
+            elif 'TCP Timeouts [sec]:' in line:
+                in_tcp_timeouts_section = True
+                continue
+            elif 'TCP Ageout Timeouts [sec]:' in line:
+                in_tcp_ageout_timeouts_section = True
+                continue
+            elif 'TCP RST pkt control:' in line:
+                continue
+            elif 'UDP Timeout [msec]:' in line:
+                in_udp_timeout_section = True
+                continue
+            elif 'UDP Ageout Timeout [msec]:' in line:
+                in_udp_ageout_timeout_section = True
+                continue
+            elif 'Syn Cookie and Resource Management:' in line:
+                in_syn_cookie_section = True
+                continue
+            elif 'Per Box Configuration' in line:
+                in_per_box_section = True
+                continue
+            elif 'Application protocol control:' in line:
+                in_application_protocol_section = True
+                continue
+            elif '--------------------------------' in line:
+                continue
+
+            # Alerts: On, Audits: Off, Drop-Log: Off, Log flow: Off
             m = p4.match(line)
             if m:
                 group = m.groupdict()
                 current_param_map['alerts'] = group['alerts']
                 current_param_map['audits'] = group['audits']
                 current_param_map['drop_log'] = group['drop_log']
+                if group.get('log_flow'):
+                    current_param_map['log_flow'] = group['log_flow']
                 continue
 
-            # HSL Mode: V9, Host: 10.1.1.1:9000, Port: 54174, Template: 300 sec
+            # Alerts: On, Drop-Log: On (without Audits field)
+            m = p4_alt.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['alerts'] = group['alerts']
+                current_param_map['drop_log'] = group['drop_log']
+                continue
+
+            # HSL Mode: Disabled, Host: 0.0.0.0:0, Port: 0, Template: 300 sec
             m = p5.match(line)
             if m:
                 group = m.groupdict()
@@ -14787,26 +15295,60 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
                 half_open_dict['low'] = int(group['low'])
                 half_open_dict['host'] = int(group['host_val'])
                 half_open_dict['host_block_time'] = int(group['host_block_time'])
+                in_half_open_section = False
                 continue
 
-            # DNS: 5, ICMP: 10, TCP: 3600, UDP: 30
+            # DNS: 5, ICMP: 10, TCP: 3600, UDP: 30 (for inactivity times)
             m = p8.match(line)
-            if m:
+            if m and in_inactivity_section:
                 group = m.groupdict()
                 inactivity_dict = current_param_map.setdefault('inactivity_times', {})
                 inactivity_dict['dns'] = int(group['dns'])
                 inactivity_dict['icmp'] = int(group['icmp'])
                 inactivity_dict['tcp'] = int(group['tcp'])
                 inactivity_dict['udp'] = int(group['udp'])
+                in_inactivity_section = False
+                continue
+
+            # ICMP: 10, TCP: 3600, UDP: 30 (for inactivity age-out times)
+            m = p8_ageout.match(line)
+            if m and in_inactivity_ageout_section:
+                group = m.groupdict()
+                inactivity_ageout_dict = current_param_map.setdefault('inactivity_age_out_times', {})
+                inactivity_ageout_dict['icmp'] = int(group['icmp'])
+                inactivity_ageout_dict['tcp'] = int(group['tcp'])
+                inactivity_ageout_dict['udp'] = int(group['udp'])
+                in_inactivity_ageout_section = False
+                continue
+
+            # Handle section headers for TCP timeouts
+            if 'TCP timeout:' in line:
+                in_tcp_timeouts_section = True
+                in_tcp_ageout_timeouts_section = False
+                continue
+            elif 'TCP age-out timeout:' in line:
+                in_tcp_timeouts_section = False
+                in_tcp_ageout_timeouts_section = True
                 continue
 
             # SYN wait time: 30, FIN wait time: 1
             m = p9.match(line)
             if m:
                 group = m.groupdict()
-                tcp_timeouts_dict = current_param_map.setdefault('tcp_timeouts', {})
-                tcp_timeouts_dict['syn_wait_time'] = int(group['syn_wait_time'])
-                tcp_timeouts_dict['fin_wait_time'] = int(group['fin_wait_time'])
+                if in_tcp_timeouts_section:
+                    tcp_timeouts_dict = current_param_map.setdefault('tcp_timeouts', {})
+                    tcp_timeouts_dict['syn_wait_time'] = int(group['syn_wait_time'])
+                    tcp_timeouts_dict['fin_wait_time'] = int(group['fin_wait_time'])
+                    in_tcp_timeouts_section = False
+                elif in_tcp_ageout_timeouts_section:
+                    tcp_ageout_timeouts_dict = current_param_map.setdefault('tcp_ageout_timeouts', {})
+                    tcp_ageout_timeouts_dict['syn_wait_time'] = int(group['syn_wait_time'])
+                    tcp_ageout_timeouts_dict['fin_wait_time'] = int(group['fin_wait_time'])
+                    in_tcp_ageout_timeouts_section = False
+                continue
+
+            # TCP RST packet control section header
+            if 'TCP RST packet control:' in line:
                 continue
 
             # half-open: On, half-close: On, idle: On
@@ -14819,13 +15361,32 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
                 tcp_rst_dict['idle'] = group['idle']
                 continue
 
-            # UDP Half-open time: 30000
+            # UDP timeout section headers
+            if 'UDP Timeout [msec]:' in line:
+                in_udp_timeout_section = True
+                in_udp_ageout_timeout_section = False
+                continue
+            elif 'UDP Ageout Timeout [msec]:' in line:
+                in_udp_timeout_section = False
+                in_udp_ageout_timeout_section = True
+                continue
+
+            # UDP half-open time: 30000 sec
             m = p11.match(line)
             if m:
-                group = m.groupdict()
-                udp_timeout_dict = current_param_map.setdefault('udp_timeout', {})
-                udp_timeout_dict['udp_half_open_time'] = int(group['udp_half_open_time'])
+                if in_udp_timeout_section:
+                    udp_timeout_dict = current_param_map.setdefault('udp_timeout', {})
+                    udp_timeout_dict['udp_half_open_time'] = int(m.group('udp_half_open_time'))
+                    # Reset UDP timeout section flag after processing
+                    in_udp_timeout_section = False
+                elif in_udp_ageout_timeout_section:
+                    udp_ageout_timeout_dict = current_param_map.setdefault('udp_ageout_timeout', {})
+                    udp_ageout_timeout_dict['udp_half_open_time'] = int(m.group('udp_half_open_time'))
+                    # Reset UDP ageout timeout section flag after processing
+                    in_udp_ageout_timeout_section = False
                 continue
+
+
 
             # Max Sessions: Unlimited
             m = p12.match(line)
@@ -14855,6 +15416,268 @@ class ShowPlatformSoftwareFirewallFPActiveParameterMaps(ShowPlatformSoftwareFire
                 group = m.groupdict()
                 syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
                 syn_cookie_dict['global_total_session'] = int(group['global_total_session'])
+                continue
+
+            # Global Number of Simultaneous Packet per Session :
+            m = p16.match(line)
+            if m:
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_number_of_simultaneous_packet_per_session'] = ''
+                continue
+
+            # Global Total Session Aggressive Aging Disabled
+            m = p17.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_total_session_aggressive_aging'] = group['status']
+                continue
+
+            # Global alert : Off
+            m = p18.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_alert'] = group['global_alert']
+                continue
+
+            # Global max incomplete : 4294967295
+            m = p19.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_max_incomplete'] = int(group['global_max_incomplete'])
+                continue
+
+            # Global max incomplete TCP: 4294967295
+            m = p20.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_max_incomplete_tcp'] = int(group['global_max_incomplete_tcp'])
+                continue
+
+            # Global max incomplete UDP: 4294967295
+            m = p21.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_max_incomplete_udp'] = int(group['global_max_incomplete_udp'])
+                continue
+
+            # Global max incomplete ICMP: 4294967295
+            m = p22.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_max_incomplete_icmp'] = int(group['global_max_incomplete_icmp'])
+                continue
+
+            # Global max incomplete Aggressive Aging Disabled
+            m = p23.match(line)
+            if m:
+                group = m.groupdict()
+                syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                syn_cookie_dict['global_max_incomplete_aggressive_aging'] = group['status']
+                continue
+
+            # syn flood limit : 4294967295
+            m = p24.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_syn_flood_limit'] = int(group['syn_flood_limit'])
+                else:
+                    current_param_map['inspect_global_syn_flood_limit'] = int(group['syn_flood_limit'])
+                continue
+
+            # Total Session Aggressive Aging Disabled
+            m = p25.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_total_session_aggressive_aging'] = group['status']
+                else:
+                    current_param_map['inspect_global_total_session_aggressive_aging'] = group['status']
+                continue
+
+            # max incomplete : 4294967295 or 0
+            m = p26.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_max_incomplete'] = int(group['max_incomplete'])
+                else:
+                    current_param_map['inspect_global_max_incomplete'] = int(group['max_incomplete'])
+                continue
+
+            # max incomplete TCP: 4294967295
+            m = p27.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_max_incomplete_tcp'] = int(group['max_incomplete_tcp'])
+                else:
+                    current_param_map['inspect_global_max_incomplete_tcp'] = int(group['max_incomplete_tcp'])
+                continue
+
+            # max incomplete UDP: 4294967295
+            m = p28.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_max_incomplete_udp'] = int(group['max_incomplete_udp'])
+                else:
+                    current_param_map['inspect_global_max_incomplete_udp'] = int(group['max_incomplete_udp'])
+                continue
+
+            # max incomplete ICMP: 4294967295
+            m = p29.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_max_incomplete_icmp'] = int(group['max_incomplete_icmp'])
+                else:
+                    current_param_map['inspect_global_max_incomplete_icmp'] = int(group['max_incomplete_icmp'])
+                continue
+
+            # max incomplete Aggressive Aging Disabled
+            m = p30.match(line)
+            if m:
+                group = m.groupdict()
+                if in_per_box_section:
+                    syn_cookie_dict = current_param_map.setdefault('syn_cookie_and_resource_management', {})
+                    syn_cookie_dict['per_box_max_incomplete_aggressive_aging'] = group['status']
+                else:
+                    current_param_map['inspect_global_max_incomplete_aggressive_aging'] = group['status']
+                continue
+
+            # VRF PMAP syn flood limit : 4294967295
+            m = p31.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_syn_flood_limit'] = int(group['vrf_pmap_syn_flood_limit'])
+                continue
+
+            # VRF PMAP total session : 4294967295
+            m = p32.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_total_session'] = int(group['vrf_pmap_total_session'])
+                continue
+
+            # VRF PMAP total session Aggressive Aging Disabled
+            m = p33.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_total_session_aggressive_aging'] = group['vrf_pmap_total_session_aggressive_aging']
+                continue
+
+            # VRF PMAP alert : Off
+            m = p34.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_alert'] = group['vrf_pmap_alert']
+                continue
+
+            # VRF PMAP max incomplete : 4294967295
+            m = p35.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_max_incomplete'] = int(group['vrf_pmap_max_incomplete'])
+                continue
+
+            # VRF PMAP max incomplete TCP: 4294967295
+            m = p36.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_max_incomplete_tcp'] = int(group['vrf_pmap_max_incomplete_tcp'])
+                continue
+
+            # VRF PMAP max incomplete UDP: 4294967295
+            m = p37.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_max_incomplete_udp'] = int(group['vrf_pmap_max_incomplete_udp'])
+                continue
+
+            # VRF PMAP max incomplete ICMP: 4294967295
+            m = p38.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_max_incomplete_icmp'] = int(group['vrf_pmap_max_incomplete_icmp'])
+                continue
+
+            # VRF PMAP max incomplete Aggressive Aging Disabled
+            m = p39.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vrf_pmap_max_incomplete_aggressive_aging'] = group['vrf_pmap_max_incomplete_aggressive_aging']
+                continue
+
+            # Zone mismatch drop: Off
+            m = p40.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['zone_mismatch_drop'] = group['zone_mismatch_drop']
+                continue
+
+            # ICMP unreachable allowed: No
+            m = p41.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['icmp_unreachable_allowed'] = group['icmp_unreachable_allowed']
+                continue
+
+            # Session reclassify allowed: No
+            m = p42.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['session_reclassify_allowed'] = group['session_reclassify_allowed']
+                continue
+
+            # vpn zone security: Off
+            m = p43.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vpn_zone_security'] = group['vpn_zone_security']
+                continue
+
+            # vpn zone allow dia: Off
+            m = p44.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['vpn_zone_allow_dia'] = group['vpn_zone_allow_dia']
+                continue
+
+            # HSL Template Timeout [sec]: 300
+            m = p45.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['hsl_template_timeout'] = int(group['hsl_template_timeout'])
+                continue
+
+            # tcp winscale loose: Off
+            m = p46.match(line)
+            if m:
+                group = m.groupdict()
+                current_param_map['tcp_winscale_loose'] = group['tcp_winscale_loose']
+                continue
+
+            # Protocol Status pairs in application protocol control section
+            m = p49.match(line)
+            if m and in_application_protocol_section and not p48.match(line):
+                group = m.groupdict()
+                app_protocol_dict = current_param_map.setdefault('application_protocol_control', {})
+                # Remove colon from protocol name (preserve original case)
+                protocol = group['protocol'].rstrip(':')
+                app_protocol_dict[protocol] = group['status']
                 continue
 
         return ret_dict
@@ -16074,5 +16897,967 @@ class ShowPlatformSoftwareFirewallQfpActiveRuntime(ShowPlatformSoftwareFirewallQ
             ret_dict["vrf_id_name_table"] = vrf_id_name_list
         if vpn_to_zone_list:
             ret_dict["vpn_to_zone_mappings"] = vpn_to_zone_list
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareIpFpActiveCefSummarySchema(MetaParser):
+    """Schema for show platform software ip FP active cef summary"""
+
+    schema = {
+        "forwarding_table_summary": {
+            "entries": ListOf(
+                {
+                    "name": str,
+                    "vrf_id": int,
+                    "table_id": int,
+                    "protocol": str,
+                    "prefixes": int,
+                    "state": str,
+                }
+            )
+        }
+    }
+
+
+class ShowPlatformSoftwareIpFpActiveCefSummary(ShowPlatformSoftwareIpFpActiveCefSummarySchema):
+    """Parser for show platform software ip FP active cef summary"""
+
+    cli_command = "show platform software ip FP active cef summary"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        entries = []
+        # Name             VRF id  Table id    Protocol         Prefixes    State
+        p1 = re.compile(
+            r"^(?P<name>\S+)\s+(?P<vrf_id>\d+)\s+(?P<table_id>\d+)\s+(?P<protocol>\S+)\s+(?P<prefixes>\d+)\s+(?P<state>.+)$"
+        )
+
+        parsing_entries = False
+
+        for line in output.splitlines():
+            line = line.rstrip()
+            if not line:
+                continue
+
+            # Default          0       0           IPv4             2528        hw: 0x55d505991190 (created)
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                entry = {
+                    "name": group["name"],
+                    "vrf_id": int(group["vrf_id"]),
+                    "table_id": int(group["table_id"]),
+                    "protocol": group["protocol"],
+                    "prefixes": int(group["prefixes"]),
+                    "state": group["state"].strip(),
+                }
+                entries.append(entry)
+                continue
+
+        if entries:
+            ret_dict.setdefault("forwarding_table_summary", {})["entries"] = entries
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareAdjacencyNexthopIpfrrSchema(MetaParser):
+    """Schema for show platform software adjacency nexthop-ipfrr"""
+    schema = {
+        "static_nexthop_ip_fastreroute": {
+            "flags": {
+                "primary": str,
+                "no_adjacency": str,
+                "incomplete_adjacency": str,
+                "adjacency": str,
+                "adjacency_downloaded": str,
+                "adjacency_resolution": str,
+                "ipfrr_adjacency_index": str,
+            },
+            "nexthops": ListOf(
+                {
+                    "protocol": str,
+                    "primary": bool,
+                    "adj_id": Or(int, str),
+                    "ifnum": int,
+                    "address": str,
+                    "idx": int,
+                    "dl": int,
+                    "res": int,
+                    "interface": str,
+                }
+            ),
+            "static_nexthop_resolution_timer_sec": int,
+            "total_nexthop_adjacency_triggered": int,
+        }
+    }
+
+
+class ShowPlatformSoftwareAdjacencyNexthopIpfrr(ShowPlatformSoftwareAdjacencyNexthopIpfrrSchema):
+    """Parser for show platform software adjacency nexthop-ipfrr"""
+
+    cli_command = "show platform software adjacency nexthop-ipfrr"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+
+        static_section_found = False
+
+        #  Static Nexthop IP Fast ReRoute:
+        p1 = re.compile(r"^\s*Static Nexthop IP Fast ReRoute:$")
+
+        #  Flags: * Primary, - No Adjacency, = Incomplete Adjacency
+        p2 = re.compile(
+            r"^\s*Flags:\s*(?P<primary>[\*\-=\+A-Za-z]+)\s+Primary,\s*(?P<no_adjacency>[\*\-=\+A-Za-z]+)\s+No Adjacency,\s*(?P<incomplete_adjacency>[\*\-=\+A-Za-z]+)\s+Incomplete Adjacency$"
+        )
+
+        #         + Adjacency, DL: Adjacency Downloaded
+        p3 = re.compile(
+            r"^\s*(?P<adjacency>[\*\-=\+A-Za-z]+)\s+Adjacency,\s*DL:\s+Adjacency Downloaded$"
+        )
+
+        #         Res: Adjacency Resolution, Idx: IPFRR Adjacency Index
+        p4 = re.compile(
+            r"^\s*Res:\s+Adjacency Resolution,\s*Idx:\s+IPFRR Adjacency Index$"
+        )
+
+        # Protocol   Adj-ID  Ifnum               Address  Idx    DL  Res  Interface
+        p5 = re.compile(
+            r"^\s*Protocol\s+Adj-ID\s+Ifnum\s+Address\s+Idx\s+DL\s+Res\s+Interface$"
+        )
+
+        # *IP           23     20             100.5.0.2+   1     3    0  Gi0/0/6
+        #  IP           85     21             100.6.0.2+   1     3    2  Gi0/0/7
+        # *IPv6         56     20 2FF:100::2+   2     3    0  Gi0/0/6
+        #  IPv6         82     21 3FF:100::2+   2     3    2  Gi0/0/7
+        p6 = re.compile(
+            r"^\s*(?P<primary>\*?)\s*(?P<protocol>IP|IPv6)\s+"
+            r"(?P<adj_id>[0-9A-Fa-f]+)\s+"
+            r"(?P<ifnum>\d+)\s+"
+            r"(?P<address>(?:[0-9\.]+|[0-9A-Fa-f:]+)\+)\s+"
+            r"(?P<idx>\d+)\s+"
+            r"(?P<dl>\d+)\s+"
+            r"(?P<res>\d+)\s+"
+            r"(?P<interface>\S+)$"
+        )
+
+        #  Static nexthop resolution will be triggered in 255 sec
+        p7 = re.compile(
+            r"^\s*Static nexthop resolution will be triggered in\s+(?P<timer>\d+)\s+sec$"
+        )
+
+        #  Total nexthop adjacency triggered 8
+        p8 = re.compile(
+            r"^\s*Total nexthop adjacency triggered\s+(?P<total>\d+)$"
+        )
+
+        for line in out.splitlines():
+            #  Static Nexthop IP Fast ReRoute:
+            m = p1.match(line)
+            if m:
+                static_section_found = True
+                static_dict = ret_dict.setdefault("static_nexthop_ip_fastreroute", {})
+                continue
+
+            if not static_section_found:
+                continue
+
+            #  Flags: * Primary, - No Adjacency, = Incomplete Adjacency
+            m = p2.match(line)
+            if m:
+                flags_dict = static_dict.setdefault("flags", {})
+                flags_dict["primary"] = m.group("primary")
+                flags_dict["no_adjacency"] = m.group("no_adjacency")
+                flags_dict["incomplete_adjacency"] = m.group("incomplete_adjacency")
+                continue
+
+            #         + Adjacency, DL: Adjacency Downloaded
+            m = p3.match(line)
+            if m:
+                flags_dict = static_dict.setdefault("flags", {})
+                flags_dict["adjacency"] = m.group("adjacency")
+                flags_dict["adjacency_downloaded"] = "DL"
+                continue
+
+            #         Res: Adjacency Resolution, Idx: IPFRR Adjacency Index
+            m = p4.match(line)
+            if m:
+                flags_dict = static_dict.setdefault("flags", {})
+                flags_dict["adjacency_resolution"] = "Res"
+                flags_dict["ipfrr_adjacency_index"] = "Idx"
+                continue
+
+            # Protocol   Adj-ID  Ifnum               Address  Idx    DL  Res  Interface
+            m = p5.match(line)
+            if m:
+                continue  # header, skip
+
+            # *IP           23     20             100.5.0.2+   1     3    0  Gi0/0/6
+            #  IP           85     21             100.6.0.2+   1     3    2  Gi0/0/7
+            # *IPv6         56     20 2FF:100::2+   2     3    0  Gi0/0/6
+            #  IPv6         82     21 3FF:100::2+   2     3    2  Gi0/0/7
+            m = p6.match(line)
+            if m:
+                nexthop = {
+                    "protocol": m.group("protocol"),
+                    "primary": True if m.group("primary") == "*" else False,
+                    "adj_id": int(m.group("adj_id")) if m.group("adj_id").isnumeric() else m.group("adj_id"),
+                    "ifnum": int(m.group("ifnum")),
+                    "address": m.group("address"),
+                    "idx": int(m.group("idx")),
+                    "dl": int(m.group("dl")),
+                    "res": int(m.group("res")),
+                    "interface": m.group("interface"),
+                }
+                static_dict.setdefault("nexthops", []).append(nexthop)
+                continue
+
+            #  Static nexthop resolution will be triggered in 255 sec
+            m = p7.match(line)
+            if m:
+                static_dict["static_nexthop_resolution_timer_sec"] = int(m.group("timer"))
+                continue
+
+            #  Total nexthop adjacency triggered 8
+            m = p8.match(line)
+            if m:
+                static_dict["total_nexthop_adjacency_triggered"] = int(m.group("total"))
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareAdjFpActiveSchema(MetaParser):
+    """Schema for show platform software adj fp active"""
+
+    schema = {
+        "number_of_adjacency_objects": int,
+        "adjacencies": {
+            Any(): {
+                "id": {"hex": str, "dec": int},
+                "interface": str,
+                "if_index": int,
+                "link_type": str,
+                "encap": str,
+                "encap_length": int,
+                "encap_type": str,
+                "mtu": int,
+                "flags": ListOf(str),
+                "incomplete_behavior_type": str,
+                "fixup": str,
+                "fixup_flags_2": str,
+                "nexthop_addr": str,
+                "ip_frr": {"mode": str, "value": int},
+                "aom_id": int,
+                "hw_handle": str,
+                "hw_handle_state": str,
+            }
+        },
+    }
+
+
+class ShowPlatformSoftwareAdjFpActive(ShowPlatformSoftwareAdjFpActiveSchema):
+    """Parser for show platform software adj fp active"""
+
+    cli_command = "show platform software adj fp active"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+        curr_id_hex = None
+
+        # Number of adjacency objects: 4
+        p1 = re.compile(r"^\s*Number of adjacency objects\s*:\s*(?P<num>\d+)\s*$")
+
+        # Adjacency id: 0xe (14)
+        p2 = re.compile(
+            r"^\s*Adjacency id\s*:\s*(?P<hex>0x[0-9a-fA-F]+)\s*\((?P<dec>\d+)\)\s*$"
+        )
+
+        #   Interface: GigabitEthernet0/0/3, IF index: 10, Link Type: MCP_LINK_IP
+        p3 = re.compile(
+            r"^\s*Interface\s*:\s*(?P<intf>[^,]+)\s*,\s*IF index\s*:\s*(?P<if_index>\d+)\s*,\s*Link Type\s*:\s*(?P<link_type>\S+)\s*$"
+        )
+
+        #   Encap: 0:50:56:8b:7b:52:c4:b2:39:fb:dc:43:8:0
+        p4 = re.compile(r"^\s*Encap\s*:\s*(?P<encap>.+?)\s*$")
+
+        #   Encap Length: 14, Encap Type: MCP_ET_ARPA, MTU: 1500
+        p5 = re.compile(
+            r"^\s*Encap Length\s*:\s*(?P<encap_length>\d+)\s*,\s*Encap Type\s*:\s*(?P<encap_type>\S+)\s*,\s*MTU\s*:\s*(?P<mtu>\d+)\s*$"
+        )
+
+        #   Flags: no-l3-inject
+        p6 = re.compile(r"^\s*Flags\s*:\s*(?P<flags>.+?)\s*$")
+
+        #   Incomplete behavior type: None
+        p7 = re.compile(
+            r"^\s*Incomplete behavior type\s*:\s*(?P<incomplete_behavior_type>.+?)\s*$"
+        )
+
+        #   Fixup: unknown
+        p8 = re.compile(r"^\s*Fixup\s*:\s*(?P<fixup>\S+)\s*$")
+
+        #   Fixup_Flags_2: unknown
+        p9 = re.compile(r"^\s*Fixup_Flags_2\s*:\s*(?P<fixup_flags_2>\S+)\s*$")
+
+        #   Nexthop addr: 172.100.0.2
+        p10 = re.compile(r"^\s*Nexthop addr\s*:\s*(?P<nexthop_addr>\S+)\s*$")
+
+        #   IP FRR MCP_ADJ_IPFRR_NONE 0
+        p11 = re.compile(r"^\s*IP FRR\s+(?P<mode>\S+)\s+(?P<value>\d+)\s*$")
+
+        #   aom id: 14879, HW handle: 0x55a9a5b76d50 (created)
+        p12 = re.compile(
+            r"^\s*aom id\s*:\s*(?P<aom_id>\d+)\s*,\s*HW handle\s*:\s*(?P<hw_handle>\S+)\s*\((?P<hw_handle_state>\S+)\)\s*$"
+        )
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Number of adjacency objects: 4
+            m = p1.match(line)
+            if m:
+                ret_dict["number_of_adjacency_objects"] = int(m.group("num"))
+                continue
+
+            # Adjacency id: 0xe (14)
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                curr_id_hex = group["hex"]
+                adj_dicts = ret_dict.setdefault("adjacencies", {})
+                one_adj = adj_dicts.setdefault(curr_id_hex, {})
+                id_dict = one_adj.setdefault("id", {})
+                id_dict["hex"] = group["hex"]
+                id_dict["dec"] = int(group["dec"])
+                continue
+
+            if not curr_id_hex:
+                continue
+
+            one_adj = ret_dict.setdefault("adjacencies", {}).setdefault(curr_id_hex, {})
+
+            #   Interface: GigabitEthernet0/0/3, IF index: 10, Link Type: MCP_LINK_IP
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                one_adj["interface"] = group["intf"]
+                one_adj["if_index"] = int(group["if_index"])
+                one_adj["link_type"] = group["link_type"]
+                continue
+
+            #   Encap: 0:50:56:8b:7b:52:c4:b2:39:fb:dc:43:8:0
+            m = p4.match(line)
+            if m:
+                one_adj["encap"] = m.group("encap")
+                continue
+
+            #   Encap Length: 14, Encap Type: MCP_ET_ARPA, MTU: 1500
+            m = p5.match(line)
+            if m:
+                group = m.groupdict()
+                one_adj["encap_length"] = int(group["encap_length"])
+                one_adj["encap_type"] = group["encap_type"]
+                one_adj["mtu"] = int(group["mtu"])
+                continue
+
+            #   Flags: no-l3-inject
+            m = p6.match(line)
+            if m:
+                flags_str = m.group("flags")
+                flags_list = [f.strip() for f in flags_str.split(",") if f.strip()]
+                one_adj["flags"] = flags_list
+                continue
+
+            #   Incomplete behavior type: None
+            m = p7.match(line)
+            if m:
+                one_adj["incomplete_behavior_type"] = m.group(
+                    "incomplete_behavior_type"
+                )
+                continue
+
+            #   Fixup: unknown
+            m = p8.match(line)
+            if m:
+                one_adj["fixup"] = m.group("fixup")
+                continue
+
+            #   Fixup_Flags_2: unknown
+            m = p9.match(line)
+            if m:
+                one_adj["fixup_flags_2"] = m.group("fixup_flags_2")
+                continue
+
+            #   Nexthop addr: 172.100.0.2
+            m = p10.match(line)
+            if m:
+                one_adj["nexthop_addr"] = m.group("nexthop_addr")
+                continue
+
+            #   IP FRR MCP_ADJ_IPFRR_NONE 0
+            m = p11.match(line)
+            if m:
+                group = m.groupdict()
+                ip_frr_dict = one_adj.setdefault("ip_frr", {})
+                ip_frr_dict["mode"] = group["mode"]
+                ip_frr_dict["value"] = int(group["value"])
+                continue
+
+            #   aom id: 14879, HW handle: 0x55a9a5b76d50 (created)
+            m = p12.match(line)
+            if m:
+                group = m.groupdict()
+                one_adj["aom_id"] = int(group["aom_id"])
+                one_adj["hw_handle"] = group["hw_handle"]
+                one_adj["hw_handle_state"] = group["hw_handle_state"]
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareAccessListRpActiveStatisticsSchema(MetaParser):
+    """Schema for show platform software access-list RP active statistics"""
+
+    schema = {
+        "location": str,
+        "set_log_threshold": int,
+        "interval": int,
+        "ipv4": {
+            "entry_add": int,
+            "entry_delete": int,
+            "bind": int,
+            "unbind": int,
+            "resequence": int,
+            "resequence_delete": int,
+        },
+        "ipv6": {
+            "entry_add": int,
+            "entry_delete": int,
+            "bind": int,
+            "unbind": int,
+            "resequence": int,
+            "resequence_delete": int,
+        },
+        "mac": {
+            "entry_add": int,
+            "entry_delete": int,
+            "bind": int,
+            "unbind": int,
+            "delete": int,
+        },
+        "sync": {
+            "start": int,
+            "end": int,
+        },
+        "qfp": {
+            "match": {
+                "add": int,
+                "replace": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+            "match_delete": {
+                "delete": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+            "action_edit": {
+                "edit": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+            "action_replace": {
+                "replace": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+            "bind": {
+                "count": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+            "unbind": {
+                "count": int,
+                "ack_success": int,
+                "ack_error": int,
+            },
+        },
+    }
+
+
+class ShowPlatformSoftwareAccessListRpActiveStatistics(ShowPlatformSoftwareAccessListRpActiveStatisticsSchema):
+    """Parser for show platform software access-list RP active statistics"""
+
+    cli_command = "show platform software access-list RP active statistics"
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        ret_dict["location"] = "RP active"
+
+        # Set Log Threshold: 0, Interval: 0
+        p1 = re.compile(
+            r"^Set +Log +Threshold\s*:\s*(?P<set_log_threshold>\d+)\s*,\s*Interval\s*:\s*(?P<interval>\d+)$"
+        )
+        # IPv4 Access-list Entry Add: 0, Delete: 0
+        p2 = re.compile(
+            r"^IPv4 +Access-list +Entry +Add\s*:\s*(?P<entry_add>\d+)\s*,\s*Delete\s*:\s*(?P<entry_delete>\d+)$"
+        )
+        # IPv4 Access-list Bind: 0, Unbind: 0
+        p3 = re.compile(
+            r"^IPv4 +Access-list +Bind\s*:\s*(?P<bind>\d+)\s*,\s*Unbind\s*:\s*(?P<unbind>\d+)$"
+        )
+        # IPv4 Access-list Resequence: 0, Delete: 0
+        p4 = re.compile(
+            r"^IPv4 +Access-list +Resequence\s*:\s*(?P<resequence>\d+)\s*,\s*Delete\s*:\s*(?P<resequence_delete>\d+)$"
+        )
+        # IPv6 Access-list Entry Add: 2032, Delete: 0
+        p5 = re.compile(
+            r"^IPv6 +Access-list +Entry +Add\s*:\s*(?P<entry_add>\d+)\s*,\s*Delete\s*:\s*(?P<entry_delete>\d+)$"
+        )
+        # IPv6 Access-list Bind: 1016, Unbind: 916
+        p6 = re.compile(
+            r"^IPv6 +Access-list +Bind\s*:\s*(?P<bind>\d+)\s*,\s*Unbind\s*:\s*(?P<unbind>\d+)$"
+        )
+        # IPv6 Access-list Resequence: 0, Delete: 916
+        p7 = re.compile(
+            r"^IPv6 +Access-list +Resequence\s*:\s*(?P<resequence>\d+)\s*,\s*Delete\s*:\s*(?P<resequence_delete>\d+)$"
+        )
+        # MAC Access-list Entry Add: 0, Delete: 0
+        p8 = re.compile(
+            r"^MAC +Access-list +Entry +Add\s*:\s*(?P<entry_add>\d+)\s*,\s*Delete\s*:\s*(?P<entry_delete>\d+)$"
+        )
+        # MAC Access-list Bind: 0, Unbind: 0
+        p9 = re.compile(
+            r"^MAC +Access-list +Bind\s*:\s*(?P<bind>\d+)\s*,\s*Unbind\s*:\s*(?P<unbind>\d+)$"
+        )
+        # MAC Access-list Delete: 0
+        p10 = re.compile(r"^MAC +Access-list +Delete\s*:\s*(?P<delete>\d+)$")
+        # Access-list Sync Start: 0, End: 0
+        p11 = re.compile(
+            r"^Access-list +Sync +Start\s*:\s*(?P<start>\d+)\s*,\s*End\s*:\s*(?P<end>\d+)$"
+        )
+        # QFP Match Add: 0, Replace: 0, ACK Success: 0, ACK Error: 0
+        p12 = re.compile(
+            r"^QFP +Match +Add\s*:\s*(?P<add>\d+)\s*,\s*Replace\s*:\s*(?P<replace>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+        # QFP Match Delete: 0, ACK Success: 0, ACK Error: 0
+        p13 = re.compile(
+            r"^QFP +Match +Delete\s*:\s*(?P<delete>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+        # QFP Action Edit: 0, ACK Success: 0, ACK Error: 0
+        p14 = re.compile(
+            r"^QFP +Action +Edit\s*:\s*(?P<edit>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+        # QFP Action Replace: 0, ACK Success: 0, ACK Error: 0
+        p15 = re.compile(
+            r"^QFP +Action +Replace\s*:\s*(?P<replace>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+        # QFP Bind: 0, ACK Success: 0, ACK Error: 0
+        p16 = re.compile(
+            r"^QFP +Bind\s*:\s*(?P<count>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+        # QFP Unbind: 0, ACK Success: 0, ACK Error: 0
+        p17 = re.compile(
+            r"^QFP +Unbind\s*:\s*(?P<count>\d+)\s*,\s*ACK +Success\s*:\s*(?P<ack_success>\d+)\s*,\s*ACK +Error\s*:\s*(?P<ack_error>\d+)$"
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Set Log Threshold: 0, Interval: 0
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                ret_dict["set_log_threshold"] = int(group["set_log_threshold"])
+                ret_dict["interval"] = int(group["interval"])
+                continue
+
+            # IPv4 Access-list Entry Add: 0, Delete: 0
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                ipv4_dict = ret_dict.setdefault("ipv4", {})
+                ipv4_dict["entry_add"] = int(group["entry_add"])
+                ipv4_dict["entry_delete"] = int(group["entry_delete"])
+                continue
+
+            # IPv4 Access-list Bind: 0, Unbind: 0
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                ipv4_dict = ret_dict.setdefault("ipv4", {})
+                ipv4_dict["bind"] = int(group["bind"])
+                ipv4_dict["unbind"] = int(group["unbind"])
+                continue
+
+            # IPv4 Access-list Resequence: 0, Delete: 0
+            m = p4.match(line)
+            if m:
+                group = m.groupdict()
+                ipv4_dict = ret_dict.setdefault("ipv4", {})
+                ipv4_dict["resequence"] = int(group["resequence"])
+                ipv4_dict["resequence_delete"] = int(group["resequence_delete"])
+                continue
+
+            # IPv6 Access-list Entry Add: 2032, Delete: 0
+            m = p5.match(line)
+            if m:
+                group = m.groupdict()
+                ipv6_dict = ret_dict.setdefault("ipv6", {})
+                ipv6_dict["entry_add"] = int(group["entry_add"])
+                ipv6_dict["entry_delete"] = int(group["entry_delete"])
+                continue
+
+            # IPv6 Access-list Bind: 1016, Unbind: 916
+            m = p6.match(line)
+            if m:
+                group = m.groupdict()
+                ipv6_dict = ret_dict.setdefault("ipv6", {})
+                ipv6_dict["bind"] = int(group["bind"])
+                ipv6_dict["unbind"] = int(group["unbind"])
+                continue
+
+            # IPv6 Access-list Resequence: 0, Delete: 916
+            m = p7.match(line)
+            if m:
+                group = m.groupdict()
+                ipv6_dict = ret_dict.setdefault("ipv6", {})
+                ipv6_dict["resequence"] = int(group["resequence"])
+                ipv6_dict["resequence_delete"] = int(group["resequence_delete"])
+                continue
+
+            # MAC Access-list Entry Add: 0, Delete: 0
+            m = p8.match(line)
+            if m:
+                group = m.groupdict()
+                mac_dict = ret_dict.setdefault("mac", {})
+                mac_dict["entry_add"] = int(group["entry_add"])
+                mac_dict["entry_delete"] = int(group["entry_delete"])
+                continue
+
+            # MAC Access-list Bind: 0, Unbind: 0
+            m = p9.match(line)
+            if m:
+                group = m.groupdict()
+                mac_dict = ret_dict.setdefault("mac", {})
+                mac_dict["bind"] = int(group["bind"])
+                mac_dict["unbind"] = int(group["unbind"])
+                continue
+
+            # MAC Access-list Delete: 0
+            m = p10.match(line)
+            if m:
+                group = m.groupdict()
+                mac_dict = ret_dict.setdefault("mac", {})
+                mac_dict["delete"] = int(group["delete"])
+                continue
+
+            # Access-list Sync Start: 0, End: 0
+            m = p11.match(line)
+            if m:
+                group = m.groupdict()
+                sync_dict = ret_dict.setdefault("sync", {})
+                sync_dict["start"] = int(group["start"])
+                sync_dict["end"] = int(group["end"])
+                continue
+
+            # QFP Match Add: 0, Replace: 0, ACK Success: 0, ACK Error: 0
+            m = p12.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                match_dict = qfp_dict.setdefault("match", {})
+                match_dict["add"] = int(group["add"])
+                match_dict["replace"] = int(group["replace"])
+                match_dict["ack_success"] = int(group["ack_success"])
+                match_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+            # QFP Match Delete: 0, ACK Success: 0, ACK Error: 0
+            m = p13.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                match_del_dict = qfp_dict.setdefault("match_delete", {})
+                match_del_dict["delete"] = int(group["delete"])
+                match_del_dict["ack_success"] = int(group["ack_success"])
+                match_del_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+            # QFP Action Edit: 0, ACK Success: 0, ACK Error: 0
+            m = p14.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                act_edit_dict = qfp_dict.setdefault("action_edit", {})
+                act_edit_dict["edit"] = int(group["edit"])
+                act_edit_dict["ack_success"] = int(group["ack_success"])
+                act_edit_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+            # QFP Action Replace: 0, ACK Success: 0, ACK Error: 0
+            m = p15.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                act_replace_dict = qfp_dict.setdefault("action_replace", {})
+                act_replace_dict["replace"] = int(group["replace"])
+                act_replace_dict["ack_success"] = int(group["ack_success"])
+                act_replace_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+            # QFP Bind: 0, ACK Success: 0, ACK Error: 0
+            m = p16.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                bind_dict = qfp_dict.setdefault("bind", {})
+                bind_dict["count"] = int(group["count"])
+                bind_dict["ack_success"] = int(group["ack_success"])
+                bind_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+            # QFP Unbind: 0, ACK Success: 0, ACK Error: 0
+            m = p17.match(line)
+            if m:
+                group = m.groupdict()
+                qfp_dict = ret_dict.setdefault("qfp", {})
+                unbind_dict = qfp_dict.setdefault("unbind", {})
+                unbind_dict["count"] = int(group["count"])
+                unbind_dict["ack_success"] = int(group["ack_success"])
+                unbind_dict["ack_error"] = int(group["ack_error"])
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareEssFpActiveDrlSchema(MetaParser):
+    """Schema for show platform software ess FP active drl"""
+
+    schema = {
+        "subscriber_policing_records": {
+            "total": int,
+            Optional("records"): {
+                int: {
+                    "segment": str,
+                    "class_in": int,
+                    "class_out": int,
+                    "evsi": int,
+                    "qfp_hdl": int,
+                    "aom_state": str,
+                    "in_rate": int,
+                    "in_bc": int,
+                    "in_be": int,
+                    "out_rate": int,
+                    "out_bc": int,
+                    "out_be": int,
+                }
+            },
+        }
+    }
+
+
+class ShowPlatformSoftwareEssFpActiveDrl(ShowPlatformSoftwareEssFpActiveDrlSchema):
+    """Parser for show platform software ess FP active drl"""
+
+    cli_command = "show platform software ess FP active drl"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+        if not out:
+            return ret_dict
+
+        record_index = 0
+        current_record = None
+
+        # Subscriber Policing records: Total  : 3
+        p1 = re.compile(r"^Subscriber +Policing +records:\s*Total\s*:\s*(?P<total>\d+)$")
+
+        # 0x004204de00000089  190         191         4326623     38          created
+        p2 = re.compile(
+            r"^(?P<segment>0x[0-9a-fA-F]+)\s+(?P<class_in>\d+)\s+(?P<class_out>\d+)\s+(?P<evsi>\d+)\s+(?P<qfp_hdl>\d+)\s+(?P<aom_state>\S+)$"
+        )
+
+        # 1                   1000        2000        1           1000        2000
+        p3 = re.compile(
+            r"^(?P<in_rate>\d+)\s+(?P<in_bc>\d+)\s+(?P<in_be>\d+)\s+(?P<out_rate>\d+)\s+(?P<out_bc>\d+)\s+(?P<out_be>\d+)$"
+        )
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Subscriber Policing records: Total  : 3
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                spr_dict = ret_dict.setdefault("subscriber_policing_records", {})
+                spr_dict["total"] = int(group["total"])
+                continue
+
+            # 0x004204de00000089  190         191         4326623     38          created
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                current_record = {
+                    "segment": group["segment"],
+                    "class_in": int(group["class_in"]),
+                    "class_out": int(group["class_out"]),
+                    "evsi": int(group["evsi"]),
+                    "qfp_hdl": int(group["qfp_hdl"]),
+                    "aom_state": group["aom_state"],
+                }
+                continue
+
+            # 1                   1000        2000        1           1000        2000
+            m = p3.match(line)
+            if m and current_record is not None:
+                group = m.groupdict()
+                current_record["in_rate"] = int(group["in_rate"])
+                current_record["in_bc"] = int(group["in_bc"])
+                current_record["in_be"] = int(group["in_be"])
+                current_record["out_rate"] = int(group["out_rate"])
+                current_record["out_bc"] = int(group["out_bc"])
+                current_record["out_be"] = int(group["out_be"])
+
+                record_index += 1
+                spr_dict = ret_dict.setdefault("subscriber_policing_records", {})
+                records_dict = spr_dict.setdefault("records", {})
+                records_dict[record_index] = current_record
+                current_record = None
+                continue
+
+        return ret_dict
+
+
+class ShowPlatformSoftwareEssFpActiveL4rSchema(MetaParser):
+    """Schema for show platform software ess fp active l4r"""
+
+    schema = {
+        "subscriber_l4redirect_records": {
+            "total": int,
+            "entries": ListOf(
+                {
+                    "segment": str,
+                    "class_in": int,
+                    "class_out": int,
+                    "evsi": int,
+                    "srv_ip": str,
+                    "srv_port": int,
+                    "qfp_hdl": int,
+                    "aom_state": str,
+                }
+            ),
+        }
+    }
+
+
+class ShowPlatformSoftwareEssFpActiveL4r(ShowPlatformSoftwareEssFpActiveL4rSchema):
+    """Parser for show platform software ess fp active l4r"""
+
+    cli_command = "show platform software ess fp active l4r"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+        if not out:
+            return ret_dict
+
+        # Subscriber L4redirect records: Total  : 2
+        p1 = re.compile(
+            r"^Subscriber\s+L4redirect\s+records\s*:\s*Total\s*:\s*(?P<total>\d+)$"
+        )
+
+        # 0x004200fc00000018                       32          33          4325629
+        p2 = re.compile(
+            r"^(?P<segment>0x[0-9a-fA-F]+)\s+(?P<class_in>\d+)\s+(?P<class_out>\d+)\s+(?P<evsi>\d+)$"
+        )
+
+        # 3001::1                                  80          37          created
+        p3 = re.compile(
+            r"^(?P<srv_ip>\S+)\s+(?P<srv_port>\d+)\s+(?P<qfp_hdl>\d+)\s+(?P<aom_state>\S+)$"
+        )
+
+        sub_dict = None
+        temp_entry = None
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Subscriber L4redirect records: Total  : 2
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                sub_dict = ret_dict.setdefault("subscriber_l4redirect_records", {})
+                sub_dict["total"] = int(group["total"])
+                sub_dict["entries"] = []
+                continue
+
+            # Skip headers and separators
+            if line.startswith("Segment") or line.startswith("SrvIP") or set(line) == {"-"}:
+                continue
+
+            # 0x004200fc00000018                       32          33          4325629
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                temp_entry = {
+                    "segment": group["segment"],
+                    "class_in": int(group["class_in"]),
+                    "class_out": int(group["class_out"]),
+                    "evsi": int(group["evsi"]),
+                }
+                continue
+
+            # 3001::1                                  80          37          created
+            m = p3.match(line)
+            if m and temp_entry is not None and sub_dict is not None:
+                group = m.groupdict()
+                temp_entry["srv_ip"] = group["srv_ip"]
+                temp_entry["srv_port"] = int(group["srv_port"])
+                temp_entry["qfp_hdl"] = int(group["qfp_hdl"])
+                temp_entry["aom_state"] = group["aom_state"]
+                sub_dict["entries"].append(temp_entry)
+                temp_entry = None
+                continue
 
         return ret_dict

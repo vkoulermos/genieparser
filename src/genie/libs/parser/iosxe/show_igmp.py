@@ -18,6 +18,7 @@ IOSXE parsers for the following show commands:
     * show ip igmp vrf {vrf} snooping groups
     * show platform software fed switch active ip igmp snooping groups count
     * show ip igmp groups <WORD>
+    * show ip igmp snooping
 """
 
 # Python
@@ -25,6 +26,7 @@ import re
 
 # Metaparser
 from genie.metaparser import MetaParser
+from genie.metaparser.util.exceptions import SchemaEmptyParserError
 from genie.metaparser.util.schemaengine import Schema, Any, Optional
 from genie.libs.parser.utils.common import Common
 from genie.parsergen import oper_fill_tabular
@@ -1680,5 +1682,381 @@ class ShowIpIgmpSnoopingGroupsVlanCount(ShowIpIgmpSnoopingGroupsVlanCountSchema)
                 group = m.groupdict()
                 ret_dict.setdefault('vlan', {}).setdefault(group['vlan'], {})['count'] = int(group['count'])
                 continue
+
+        return ret_dict
+
+
+# ============================================
+# Schema for 'show ip igmp snooping'
+# ============================================
+class ShowIpIgmpSnoopingSchema(MetaParser):
+    """Schema for show ip igmp snooping"""
+
+    schema = {
+        Optional('igmp_snooping'): str,
+        Optional('igmp_snooping_admin_state'): str,
+        Optional('igmp_snooping_oper_state'): str,
+        Optional('global_pim_snooping'): str,
+        Optional('eht_db_limit'): int,
+        Optional('eht_db_count'): int,
+        'igmpv3_snooping': str,
+        'report_supression': str,
+        'tcn_solicit_query': str,
+        'tcn_flood_query_count': int,
+        'robustness_variable': int,
+        'last_member_query_count': int,
+        'last_member_query_interval': int,
+        Optional('check_ttl'): str,
+        Optional('check_router_alert_option'): str,
+        'vlan': {
+            Any(): {
+                Optional('igmp_snooping'): str,
+                Optional('igmp_snooping_admin_state'): str,
+                Optional('igmp_snooping_oper_state'): str,
+                Optional('pim_snooping'): str,
+                'report_supression': str,
+                'igmpv2_immediate_leave': str,
+                'explicit_host_tracking': str,
+                Optional('eht_db_limit'): int,
+                Optional('eht_db_count'): int,
+                Optional('multicast_router_learning_mode'): str,
+                Optional('cgmp_inter_mode'): str,
+                'robustness_variable': int,
+                'last_member_query_count': int,
+                'last_member_query_interval': int,
+                Optional('check_ttl'): str,
+                Optional('check_router_alert_option'): str,
+                Optional('topology_change_state'): str,
+            },
+        },
+    }
+
+
+# ==================================================
+# Parser for 'show ip igmp snooping'
+# ==================================================
+class ShowIpIgmpSnooping(ShowIpIgmpSnoopingSchema):
+    """Parser for show ip igmp snooping"""
+
+    cli_command = 'show ip igmp snooping'
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+
+        # Vlan 1:
+        # Vlan 3:
+        p0 = re.compile(r'^Vlan\s+(?P<vlan>\d+):\s*$')
+
+        # IGMP snooping             : Enabled
+        p1 = re.compile(
+            r'^IGMP\s+snooping\s+:\s+(?P<igmp_snooping>\w+)$'
+        )
+
+        # IGMP snooping Oper State     : Enabled
+        # IGMP snooping Oper State            : Enabled
+        p1_1 = re.compile(
+            r'^IGMP\s+snooping\s+Oper\s+State\s+:'
+            r'\s+(?P<igmp_snooping_oper_state>\w+)$'
+        )
+
+        # IGMP snooping Admin State           : Enabled
+        p1_2 = re.compile(
+            r'^IGMP\s+snooping\s+Admin\s+State\s+:'
+            r'\s+(?P<igmp_snooping_admin_state>\w+)$'
+        )
+
+        # Global PIM Snooping       : Disabled
+        p2 = re.compile(
+            r'^Global\s+PIM\s+Snooping\s+:'
+            r'\s+(?P<global_pim_snooping>\w+)$'
+        )
+
+        # IGMPv3 snooping           : Enabled
+        p3 = re.compile(
+            r'^IGMPv3\s+snooping\s+:\s+(?P<igmpv3_snooping>\w+)$'
+        )
+
+        # Report suppression        : Enabled
+        # Report suppression                  : Enabled
+        p4 = re.compile(
+            r'^Report\s+suppression\s+:\s+(?P<report_supression>\w+)$'
+        )
+
+        # TCN solicit query         : Disabled
+        p5 = re.compile(
+            r'^TCN\s+solicit\s+query\s+:\s+(?P<tcn_solicit_query>\w+)$'
+        )
+
+        # TCN flood query count     : 2
+        p6 = re.compile(
+            r'^TCN\s+flood\s+query\s+count\s+:'
+            r'\s+(?P<tcn_flood_query_count>\d+)$'
+        )
+
+        # Robustness variable       : 2
+        # Robustness variable                 : 2
+        p7 = re.compile(
+            r'^Robustness\s+variable\s+:'
+            r'\s+(?P<robustness_variable>\d+)$'
+        )
+
+        # Last member query count   : 2
+        # Last member query count             : 2
+        p8 = re.compile(
+            r'^Last\s+member\s+query\s+count\s+:'
+            r'\s+(?P<last_member_query_count>\d+)$'
+        )
+
+        # Last member query interval : 1000
+        # Last member query interval          : 1000
+        p9 = re.compile(
+            r'^Last\s+member\s+query\s+interval\s+:'
+            r'\s+(?P<last_member_query_interval>\d+)$'
+        )
+
+        # Pim Snooping              : Disabled
+        p10 = re.compile(
+            r'^Pim\s+Snooping\s+:\s+(?P<pim_snooping>\w+)$'
+        )
+
+        # IGMPv2 immediate leave              : Disabled
+        p11 = re.compile(
+            r'^IGMPv2\s+immediate\s+leave\s+:'
+            r'\s+(?P<igmpv2_immediate_leave>\w+)$'
+        )
+
+        # Explicit host tracking              : Enabled
+        p12 = re.compile(
+            r'^Explicit\s+host\s+tracking\s+:'
+            r'\s+(?P<explicit_host_tracking>\w+)$'
+        )
+
+        # Multicast router learning mode : pim-dvmrp
+        p13 = re.compile(
+            r'^Multicast\s+router\s+learning\s+mode\s+:'
+            r'\s+(?P<multicast_router_learning_mode>\S+)$'
+        )
+
+        # CGMP interoperability mode : IGMP_ONLY
+        p14 = re.compile(
+            r'^CGMP\s+interoperability\s+mode\s+:'
+            r'\s+(?P<cgmp_inter_mode>\S+)$'
+        )
+
+        # Topology change           : No
+        p15 = re.compile(
+            r'^Topology\s+change\s+:\s+(?P<topology_change_state>\w+)$'
+        )
+
+        # Check TTL=1               : No
+        # Check TTL=1                         : Yes
+        p16 = re.compile(
+            r'^Check\s+TTL=1\s+:\s+(?P<check_ttl>\w+)$'
+        )
+
+        # Check Router-Alert-Option : No
+        # Check Router-Alert-Option           : Yes
+        p17 = re.compile(
+            r'^Check\s+Router-Alert-Option\s+:'
+            r'\s+(?P<check_router_alert_option>\w+)$'
+        )
+
+        # EHT DB limit/count           : 100000/0
+        # EHT DB limit/count                  : 100000/0
+        p18 = re.compile(
+            r'^EHT\s+DB\s+limit/count\s+:'
+            r'\s+(?P<eht_db_limit>\d+)/(?P<eht_db_count>\d+)$'
+        )
+
+        vlan_dict = ret_dict
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Parse: Vlan 1:
+            m = p0.match(line)
+            if m:
+                vlan_dict = ret_dict.setdefault('vlan', {}).setdefault(
+                    m.groupdict()['vlan'], {}
+                )
+                continue
+
+            # Parse: IGMP snooping Oper State     : Enabled
+            m = p1_1.match(line)
+            if m:
+                state = m.groupdict()['igmp_snooping_oper_state']
+                vlan_dict['igmp_snooping_oper_state'] = state
+                if vlan_dict is ret_dict:
+                    ret_dict['igmp_snooping_oper_state'] = state
+                continue
+
+            # Parse: IGMP snooping Admin State           : Enabled
+            m = p1_2.match(line)
+            if m:
+                state = m.groupdict()['igmp_snooping_admin_state']
+                vlan_dict['igmp_snooping_admin_state'] = state
+                if vlan_dict is ret_dict:
+                    ret_dict['igmp_snooping_admin_state'] = state
+                continue
+
+            # Parse: IGMP snooping             : Enabled
+            m = p1.match(line)
+            if m:
+                state = m.groupdict()['igmp_snooping']
+                vlan_dict['igmp_snooping'] = state
+                if vlan_dict is ret_dict:
+                    ret_dict['igmp_snooping'] = state
+                continue
+
+            # Parse: Global PIM Snooping       : Disabled
+            m = p2.match(line)
+            if m:
+                ret_dict['global_pim_snooping'] = m.groupdict()[
+                    'global_pim_snooping'
+                ]
+                continue
+
+            # Parse: IGMPv3 snooping           : Enabled
+            m = p3.match(line)
+            if m:
+                ret_dict['igmpv3_snooping'] = m.groupdict()['igmpv3_snooping']
+                continue
+
+            # Parse: Report suppression        : Enabled
+            m = p4.match(line)
+            if m:
+                value = m.groupdict()['report_supression']
+                if vlan_dict is ret_dict:
+                    ret_dict['report_supression'] = value
+                else:
+                    vlan_dict['report_supression'] = value
+                continue
+
+            # Parse: TCN solicit query         : Disabled
+            m = p5.match(line)
+            if m:
+                ret_dict['tcn_solicit_query'] = m.groupdict()[
+                    'tcn_solicit_query'
+                ]
+                continue
+
+            # Parse: TCN flood query count     : 2
+            m = p6.match(line)
+            if m:
+                ret_dict['tcn_flood_query_count'] = int(
+                    m.groupdict()['tcn_flood_query_count']
+                )
+                continue
+
+            # Parse: Robustness variable       : 2
+            m = p7.match(line)
+            if m:
+                value = int(m.groupdict()['robustness_variable'])
+                vlan_dict['robustness_variable'] = value
+                if vlan_dict is ret_dict:
+                    ret_dict['robustness_variable'] = value
+                continue
+
+            # Parse: Last member query count   : 2
+            m = p8.match(line)
+            if m:
+                value = int(m.groupdict()['last_member_query_count'])
+                vlan_dict['last_member_query_count'] = value
+                if vlan_dict is ret_dict:
+                    ret_dict['last_member_query_count'] = value
+                continue
+
+            # Parse: Last member query interval : 1000
+            m = p9.match(line)
+            if m:
+                value = int(m.groupdict()['last_member_query_interval'])
+                vlan_dict['last_member_query_interval'] = value
+                if vlan_dict is ret_dict:
+                    ret_dict['last_member_query_interval'] = value
+                continue
+
+            # Parse: Pim Snooping              : Disabled
+            m = p10.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['pim_snooping'] = m.groupdict()['pim_snooping']
+                continue
+
+            # Parse: IGMPv2 immediate leave              : Disabled
+            m = p11.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['igmpv2_immediate_leave'] = m.groupdict()[
+                    'igmpv2_immediate_leave'
+                ]
+                continue
+
+            # Parse: Explicit host tracking              : Enabled
+            m = p12.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['explicit_host_tracking'] = m.groupdict()[
+                    'explicit_host_tracking'
+                ]
+                continue
+
+            # Parse: Multicast router learning mode : pim-dvmrp
+            m = p13.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['multicast_router_learning_mode'] = m.groupdict()[
+                    'multicast_router_learning_mode'
+                ]
+                continue
+
+            # Parse: CGMP interoperability mode : IGMP_ONLY
+            m = p14.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['cgmp_inter_mode'] = m.groupdict()['cgmp_inter_mode']
+                continue
+
+            # Parse: Topology change           : No
+            m = p15.match(line)
+            if m and vlan_dict is not ret_dict:
+                vlan_dict['topology_change_state'] = m.groupdict()[
+                    'topology_change_state'
+                ]
+                continue
+
+            # Parse: Check TTL=1               : No
+            m = p16.match(line)
+            if m:
+                value = m.groupdict()['check_ttl']
+                vlan_dict['check_ttl'] = value
+                if vlan_dict is ret_dict:
+                    ret_dict['check_ttl'] = value
+                continue
+
+            # Parse: Check Router-Alert-Option : No
+            m = p17.match(line)
+            if m:
+                value = m.groupdict()['check_router_alert_option']
+                vlan_dict['check_router_alert_option'] = value
+                if vlan_dict is ret_dict:
+                    ret_dict['check_router_alert_option'] = value
+                continue
+
+            # Parse: EHT DB limit/count           : 100000/0
+            m = p18.match(line)
+            if m:
+                value = m.groupdict()
+                vlan_dict['eht_db_limit'] = int(value['eht_db_limit'])
+                vlan_dict['eht_db_count'] = int(value['eht_db_count'])
+                if vlan_dict is ret_dict:
+                    ret_dict['eht_db_limit'] = int(value['eht_db_limit'])
+                    ret_dict['eht_db_count'] = int(value['eht_db_count'])
+                continue
+
+        # No meaningful parse result for empty/invalid output
+        if not ret_dict:
+            raise SchemaEmptyParserError("Parser Output is empty")
 
         return ret_dict

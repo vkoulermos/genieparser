@@ -1,0 +1,52 @@
+show vpdn session all
+
+Example 1:
+Session id 5 is up, tunnel id 13695
+Call serial number is 3355500002
+Remote tunnel name is User03
+  Internet address is 10.0.0.63
+  Session state is established, time since change 00:03:53
+    52 Packets sent, 52 received
+    2080 Bytes sent, 1316 received
+  Session MTU is 1464 bytes
+  Session username is nobody@cisco.com
+    Interface
+    Remote session id is 692, remote tunnel id 58582
+  UDP checksums are disabled
+  SSS switching enabled
+  Sequencing is off
+  Unique ID is 8
+
+Example 2:
+Session id 6 is up, tunnel id 13695
+Call serial number is 3355500003
+Remote tunnel name is User03
+  Internet address is 10.0.0.63
+  Session state is established, time since change 00:04:22
+    52 Packets sent, 52 received
+    2080 Bytes sent, 1316 received
+  Session MTU is 1464 bytes
+  Session username is nobody@cisco.com
+    Interface
+    Remote session id is 693, remote tunnel id 58582
+  UDP checksums are disabled
+  SSS switching enabled
+  Sequencing is off
+  Unique ID is 9
+
+Example 3:
+Session id 3 is up, tunnel id 13695
+Call serial number is 3355500000
+Remote tunnel name is User03
+  Internet address is 10.0.0.63
+  Session state is established, time since change 2d21h
+    48693 Packets sent, 48692 received
+    1947720 Bytes sent, 1314568 received
+  Session MTU is 1464 bytes
+  Session username is nobody2@cisco.com
+    Interface
+    Remote session id is 690, remote tunnel id 58582
+  UDP checksums are disabled
+  SSS switching enabled
+  Sequencing is off
+  Unique ID is 3

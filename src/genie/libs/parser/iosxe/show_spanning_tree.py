@@ -1653,7 +1653,11 @@ class ShowSpanningTreeMstInterface(ShowSpanningTreeMstInterfaceSchema):
         p1 = re.compile(r'^(?P<interface>\S+) +of +MST(?P<mst_id>\d+) +is +(?P<role>\S+) +(?P<status>\S+)$')
 
         # Edge port: no             (default)        port guard : none        (default)
-        p2 = re.compile(r'^Edge +port: +(?P<edge_port>\S+) +\(default\) +port +guard : +(?P<port_guard>\S+) +\(default\)$')
+        # Portfast : no             (default)        port guard : none        (default)
+        p2 = re.compile(
+            r'^(?:Edge +port|Portfast)\s*:\s*(?P<edge_port>\S+)\s+\(default\)\s+'
+            r'port +guard\s*:\s*(?P<port_guard>\S+)\s+\(default\)$'
+        )
 
         # Link type: point-to-point (auto)           bpdu filter: disable     (default)
         p3 = re.compile(r'^Link +type: +(?P<link_type>\S+) +\(auto\) +bpdu +filter: +(?P<bpdu_filter>\S+) +\(default\)$')
@@ -1684,6 +1688,7 @@ class ShowSpanningTreeMstInterface(ShowSpanningTreeMstInterfaceSchema):
                 continue
 
             # Edge port: no             (default)        port guard : none        (default)
+            # Portfast : no             (default)        port guard : none        (default)
             m = p2.match(line)
             if m:
                 group = m.groupdict()

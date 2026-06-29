@@ -1,0 +1,15 @@
+show spanning-tree mst interface FiftyGigE8/0/30
+
+FiftyGigE8/0/30 of MST0 is designated forwarding
+Portfast : no (default) port guard : none (default)
+Link type: point-to-point (auto) bpdu filter: disable (default)
+Boundary : internal bpdu guard : disable (default)
+PVST Sim : enable (default)
+Bpdus sent 692, received 0
+
+Instance Role Sts Cost Prio.Nbr Vlans mapped
+-------- ---- --- --------- -------- -------------------------------
+0 Desg FWD 2000 128.1206 1-9,21-29,41-4094
+4 Desg FWD 2000 128.1206 30-40
+
+epcot-1#

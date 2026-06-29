@@ -1,0 +1,31 @@
+DNAC-9#show ip igmp snooping
+Global IGMP Snooping configuration:
+-------------------------------------------
+IGMP snooping Oper State     : Enabled
+IGMPv3 snooping              : Enabled
+Report suppression           : Enabled
+EHT DB limit/count           : 100000/0
+TCN solicit query            : Disabled
+TCN flood query count        : 2
+Robustness variable          : 2
+Last member query count      : 2
+Last member query interval   : 1000
+Check TTL=1                  : No
+Check Router-Alert-Option    : No
+
+
+Vlan 1:
+--------
+IGMP snooping Admin State           : Enabled
+IGMP snooping Oper State            : Enabled
+IGMPv2 immediate leave              : Disabled
+Explicit host tracking              : Enabled
+Report suppression                  : Enabled
+Robustness variable                 : 2
+Last member query count             : 2
+Last member query interval          : 1000
+EHT DB limit/count                  : 100000/0
+Check TTL=1                         : Yes
+Check Router-Alert-Option           : Yes
+
+DNAC-9#

@@ -1,0 +1,64 @@
+show subscriber session all
+
+Current Subscriber Information: Total sessions 1
+--------------------------------------------------
+Type: IPv4, UID: 2, State: authen, Identity: rouble-pppoe
+IPv4 Address: 10.0.0.2
+Session Up-time: 00:01:37, Last Changed: 00:00:02
+Switch-ID: 4102
+
+Policy information:
+  Authentication status: authen
+  Active services associated with session:
+    name "keepAliveSvc"
+    name "transparent-service"
+  Rules, actions and conditions executed:
+        subscriber condition-map match-all CONDA
+          match identifier source-ip-address 10.0.0.2 255.255.255.255 [TRUE]
+    subscriber rule-map START_RULE
+      condition CONDA event session-start
+        1 authorize aaa list author_list identifier source-ip-address
+    subscriber rule-map default-internal-rule
+      condition always event service-start
+        1 service-policy type service identifier service-name
+    subscriber rule-map default-internal-rule
+      condition always event service-start
+        1 service-policy type service identifier service-name
+
+Classifiers:
+Class-id    Dir   Packets    Bytes                  Pri.  Definition
+0           In    9          1026                   0    Match Any
+1           Out   17         1938                   0    Match Any
+2           In    8          800                    0    Match ACL 102
+
+Template Id : 9
+
+Features:
+
+Static Routes:
+Class-id  Configuration Status           Source
+0          This feature is enabled       Peruser
+
+Prepaid Time Monitor:
+Class-id   Dir  Threshold  Quota    Session Time Source
+2          In   380        400      73           transparent-service
+
+Prepaid Volume Monitor:
+Class-id   Dir  Packets    Bytes                  Source
+2          In   0          0                      transparent-service
+
+  Usage(since last update): 0 - Total: 0
+  Threshold:300 - Quota:500
+  Post Tariff Threshold:800 - Quota:1000
+  Current states: Start Tariff-switched
+
+Keepalive:
+Class-id   Idle period Attempts Interval Protocol Source
+0          60          5        1        ICMP     keepAliveSvc
+
+Configuration Sources:
+Type  Active Time  AAA Service ID  Name
+SVC   00:01:13     -               transparent-service
+USR   00:01:37     -               Peruser
+SVC   00:00:02     -               keepAliveSvc
+INT   00:01:37     -               FastEthernet0/3/0

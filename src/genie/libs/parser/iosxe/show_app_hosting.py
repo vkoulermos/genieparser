@@ -27,7 +27,7 @@ class ShowApphostingInfraSchema(MetaParser):
         'iox_version': str,
         'app_signature_verification': str,
         'internal_working_directory': str,
-        'appge_port_number': {
+        Optional('appge_port_number'): {
             str: {
                 'appge_interface_name': str,
                 }
@@ -110,7 +110,8 @@ class ShowApphostingInfra(ShowApphostingInfraSchema):
                     appge_interface_dict['appge_interface_name'] = \
                         m.groupdict()['appge_interface_name']
                     appge_dict[m.groupdict()['appge_port_number']] = appge_interface_dict
-            parsed_dict['appge_port_number'] = appge_dict
+            if appge_dict:
+                parsed_dict['appge_port_number'] = appge_dict
         return parsed_dict
 
 
@@ -605,7 +606,7 @@ class ShowAppHostingDetailAppidSchema(MetaParser):
                 'network_name': str
             }
         },
-        'application_health': {
+        Optional('application_health'): {
             'status': str,
             Optional('last_probe_error'): str,
             Optional('last_probe_output'): str

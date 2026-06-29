@@ -10,6 +10,8 @@
      * show aaa dead-criteria radius {server_ip}
      * show aaa dead-criteria radius {server_ip} auth-port {auth_port} acct-port {acct_port}
      * show aaa dead-criteria radius server-name {server_name}
+     * show idmgr session key aaa-unique-id {aaa_unique_id}
+     * show idmgr session key aaa {aaa_unique_id}
 """
 #python
 import re
@@ -1877,5 +1879,215 @@ class ShowAaaMemory(ShowAaaMemorySchema):
                 low_memory['pod_pkt_drop'] = int(dict_val['pod_pkt_drop'])
                 continue
 
+
+        return ret_dict
+
+
+class ShowIdmgrSessionKeyIdSchema(MetaParser):
+    """Schema for show idmgr session key aaa-unique-id {aaa_unique_id}"""
+
+    schema = {
+        'session': {
+            'key': {
+                Any(): {
+                    Any(): {
+                        'session_handle': str,
+                        'aaa_unique_id': str,
+                        'authen_status': str,
+                        'interface': str,
+                        'username': str,
+                        'addr': str,
+                        'session_guid': str,
+                        Optional('services'): {
+                            Any(): {
+                                'session_handle': str,
+                                'service_name': str,
+                                'idmgr_svc_key': str,
+                                'authen_status': str
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowIdmgrSessionKeyId(ShowIdmgrSessionKeyIdSchema):
+    """Parser for show idmgr session key aaa-unique-id {aaa_unique_id}"""
+
+    cli_command = [
+        "show idmgr session key aaa-unique-id {aaa_unique_id}",
+        "show idmgr session key aaa {aaa_unique_id}",
+    ]
+
+    def cli(self, aaa_unique_id=None, id=None, output=None):
+        use_short_command = aaa_unique_id is None and id is not None
+        if aaa_unique_id is None:
+            aaa_unique_id = id
+
+        if output is None:
+            if use_short_command:
+                cmd = self.cli_command[1].format(aaa_unique_id=aaa_unique_id)
+            else:
+                cmd = self.cli_command[0].format(aaa_unique_id=aaa_unique_id)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        current_record = None
+        pending_record = {}
+        current_service = None
+
+        # show idmgr session key aaa-unique-id 00000013
+        # show idmgr session key aaa 00000013
+        p_cmd = re.compile(
+            r'^\s*show idmgr session key aaa(?:-unique-id)?\s+'
+            r'(?P<aaa_unique_id>\S+)\s*$'
+        )
+        # example1:
+        p0 = re.compile(r'^\s*example.*:\s*$')
+        # session-handle = 5300000C
+        p1 = re.compile(r'^\s*session-handle\s*=\s*(?P<session_handle>\S+)\s*$')
+        # aaa-unique-id = 00000013
+        p2 = re.compile(r'^\s*aaa-unique-id\s*=\s*(?P<aaa_unique_id>\S+)\s*$')
+        # authen-status = authen
+        p3 = re.compile(r'^\s*authen-status\s*=\s*(?P<authen_status>\S+)\s*$')
+        # interface = nas-port:0.0.0.0:0/1/5/10.100
+        p4 = re.compile(r'^\s*interface\s*=\s*(?P<interface>.*\S)\s*$')
+        # username = p3p4user4
+        p5 = re.compile(r'^\s*username\s*=\s*(?P<username>.*\S)\s*$')
+        # addr = 11.11.11.1
+        p6 = re.compile(r'^\s*addr\s*=\s*(?P<addr>\S+)\s*$')
+        # session-guid = 091BE92C00000013
+        p7 = re.compile(r'^\s*session-guid\s*=\s*(?P<session_guid>\S+)\s*$')
+        # Service 1 information:
+        p8 = re.compile(r'^\s*Service\s+(?P<idx>\d+)\s+information:\s*$')
+        # service-name = nonTC1
+        p9 = re.compile(r'^\s*service-name\s*=\s*(?P<service_name>.*\S)\s*$')
+        # idmgr-svc-key = 5300000CA7000003
+        p10 = re.compile(r'^\s*idmgr-svc-key\s*=\s*(?P<idmgr_svc_key>\S+)\s*$')
+
+        for raw_line in output.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            # show idmgr session key aaa-unique-id 00000013
+            m = p_cmd.match(line)
+            if m:
+                if aaa_unique_id is None:
+                    aaa_unique_id = m.group("aaa_unique_id")
+                continue
+
+            # example1:
+            m = p0.match(line)
+            if m:
+                current_record = None
+                pending_record = {}
+                current_service = None
+                continue
+
+            # Service 1 information:
+            m = p8.match(line)
+            if m:
+                idx = m.group("idx")
+                if current_record is not None:
+                    services_dict = current_record.setdefault("services", {})
+                    current_service = services_dict.setdefault(idx, {})
+                continue
+
+            # session-handle = 5300000C
+            m = p1.match(line)
+            if m:
+                val = m.group("session_handle")
+                if current_service is not None:
+                    current_service["session_handle"] = val
+                elif current_record is None:
+                    pending_record["session_handle"] = val
+                else:
+                    current_record["session_handle"] = val
+                continue
+
+            # aaa-unique-id = 00000013
+            m = p2.match(line)
+            if m:
+                uid = m.group("aaa_unique_id")
+                id_key = aaa_unique_id or uid
+                records_dict = ret_dict.setdefault("session", {}).setdefault("key", {}).setdefault(id_key, {})
+                current_record = records_dict.setdefault(uid, {})
+                # apply any pending fields collected before uid was known
+                if pending_record:
+                    current_record.update(pending_record)
+                    pending_record = {}
+                current_record["aaa_unique_id"] = uid
+                current_service = None
+                continue
+
+            # authen-status = authen
+            m = p3.match(line)
+            if m:
+                val = m.group("authen_status")
+                if current_service is not None:
+                    current_service["authen_status"] = val
+                elif current_record is None:
+                    pending_record["authen_status"] = val
+                else:
+                    current_record["authen_status"] = val
+                continue
+
+            # interface = nas-port:0.0.0.0:0/1/5/10.100
+            m = p4.match(line)
+            if m:
+                val = m.group("interface")
+                if current_record is None:
+                    pending_record["interface"] = val
+                else:
+                    current_record["interface"] = val
+                continue
+
+            # username = p3p4user4
+            m = p5.match(line)
+            if m:
+                val = m.group("username")
+                if current_record is None:
+                    pending_record["username"] = val
+                else:
+                    current_record["username"] = val
+                continue
+
+            # addr = 11.11.11.1
+            m = p6.match(line)
+            if m:
+                val = m.group("addr")
+                if current_record is None:
+                    pending_record["addr"] = val
+                else:
+                    current_record["addr"] = val
+                continue
+
+            # session-guid = 091BE92C00000013
+            m = p7.match(line)
+            if m:
+                val = m.group("session_guid")
+                if current_record is None:
+                    pending_record["session_guid"] = val
+                else:
+                    current_record["session_guid"] = val
+                continue
+
+            # service-name = nonTC1
+            m = p9.match(line)
+            if m and current_service is not None:
+                current_service["service_name"] = m.group("service_name")
+                continue
+
+            # idmgr-svc-key = 5300000CA7000003
+            m = p10.match(line)
+            if m and current_service is not None:
+                current_service["idmgr_svc_key"] = m.group("idmgr_svc_key")
+                continue
 
         return ret_dict

@@ -1,0 +1,31 @@
+Router# show platform hardware qfp active interface if-name GigabitEthernet0/0/0 statistics
+
+Interface: GigabitEthernet0/0/0
+--------------------------------
+
+RX Statistics
+--------------
+Packets Received                  : 12547892
+Bytes Received                    : 9876543210
+IPv4 Packets                      : 10234567
+IPv6 Packets                      : 1456789
+Multicast Packets                 : 45678
+Broadcast Packets                 : 12345
+Drops                             : 12
+
+TX Statistics
+--------------
+Packets Transmitted               : 12499871
+Bytes Transmitted                 : 9765432109
+IPv4 Packets                      : 10199876
+IPv6 Packets                      : 1445567
+Multicast Packets                 : 45211
+Broadcast Packets                 : 12098
+Drops                             : 3
+
+QFP Statistics
+---------------
+Packets Process Switched          : 2345
+Packets CEF Switched              : 24999871
+Packets Punt                      : 45
+Packets Dropped                   : 15

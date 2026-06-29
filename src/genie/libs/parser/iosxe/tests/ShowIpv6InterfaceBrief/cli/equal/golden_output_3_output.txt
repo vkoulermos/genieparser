@@ -1,0 +1,33 @@
+show ipv6 interface brief
+GigabitEthernet0/0/0   [up/up]
+    unassigned
+GigabitEthernet0/0/1   [up/up]
+    unassigned
+GigabitEthernet0/0/2   [administratively down/down]
+    unassigned
+GigabitEthernet0/0/3   [administratively down/down]
+    unassigned
+Te0/0/4                [up/up]
+    FE80::9633:D8FF:FE01:6884
+    2015:A1::1
+Te0/0/5                [up/up]
+    FE80::9633:D8FF:FE01:6885
+    2060:A1::1
+Te0/1/0                [administratively down/down]
+    unassigned
+Te1/0/0                [administratively down/down]
+    unassigned
+Sdwan-system-intf      [up/up]
+    unassigned
+vmanage_system         [up/up]
+    unassigned
+Loopback65528          [up/up]
+    unassigned
+Loopback65529          [up/up]
+    unassigned
+Tunnel2                [up/up]
+    unassigned
+Tunnel101              [up/up]
+    FE80::9633:D8FF:FE01:6880
+    unnumbered (TenGigabitEthernet0/0/4)
+    2015:A1::1

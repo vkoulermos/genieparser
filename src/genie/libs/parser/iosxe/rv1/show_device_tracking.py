@@ -27,7 +27,7 @@ class ShowDeviceTrackingDatabaseMacDetailsSchema(MetaParser):
                 "policy": str,
                 Optional("input_index"): int,
                 Optional("attached"): {
-                    int: {
+                    Optional(int): {
                         "ip": str,
                     }
                 }
@@ -104,6 +104,7 @@ class ShowDeviceTrackingDatabaseMacDetails(ShowDeviceTrackingDatabaseMacDetailsS
                     index_dict['time_left'] = groups['time_left']
                 if groups['input_index']:
                     index_dict['input_index'] = int(groups['input_index'])
+                index_dict['attached'] = {}
                 continue
 
             # 	 Attached IP: 20.0.0.1        

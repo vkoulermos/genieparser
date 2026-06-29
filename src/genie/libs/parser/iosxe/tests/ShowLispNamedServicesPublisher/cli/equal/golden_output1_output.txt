@@ -1,0 +1,11 @@
+206-PxTR#show lisp 0 instance-id 4 named-services publisher
+LISP Publisher Information
+Type: L = Local CP, T = Transit CP, S = Service CP
+      I = IID PubSub, P = Policy/EID PubSub
+
+Publisher       State       Session  Type  PubSub State
+100.44.44.44    Reachable   Down     L     Idle
+100.55.55.55    Reachable   Up       LI    Established
+100.77.77.77    Reachable   Down     T     Idle
+100.78.78.78    Reachable   Down     T     Idle
+

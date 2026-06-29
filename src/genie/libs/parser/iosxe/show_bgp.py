@@ -675,6 +675,7 @@ class ShowBgpAllDetailSchema(MetaParser):
                                                     'out': str,
                                                 },
                                                 Optional('next_hop'): str,
+                                                Optional('next_hop_link_local'): str,
                                                 Optional('next_hop_igp_metric'): str,
                                                 Optional('gateway'): str,
                                                 Optional('route_info'): str,
@@ -843,13 +844,15 @@ class ShowBgpDetailSuperParser(ShowBgpAllDetailSchema):
                           r'+(?P<prefix_table_version>[0-9]+)$')
 
         # 10.1.1.2 from 10.1.1.2 (10.1.1.2)
+        # 2001:3:5:1::5 (FE80:3:5:1::5) from 2001:3:5:1::5 (5.5.5.5)
         # 10.16.2.2 (metric 11) (via default) from 10.16.2.2 (10.16.2.2)
         # :: (via vrf VRF1) from 0.0.0.0 (10.1.1.1)
         # 192.168.0.1 (inaccessible) from 192.168.0.9 (192.168.0.9)
         # 172.17.111.1 (via vrf SH_BGP_VRF100) from 172.17.111.1 (10.5.5.5)
         p4 = re.compile(r'^((?P<next_hop>[a-zA-Z0-9\.\:]+)'
                         r'(( +\(metric +(?P<next_hop_igp_metric>[0-9]+)\))|'
-                        r'( +\((?P<inaccessible>inaccessible)\)))?'
+                        r'( +\((?P<inaccessible>inaccessible)\))|'
+                        r'( +\((?P<next_hop_link_local>[a-zA-Z0-9\.\:]+)\)))?'
                         r'( +\(via +(?P<next_hop_via>[\S\s]+)\))? +'
                         r'from +(?P<gateway>[a-zA-Z0-9\.\:]+)'
                         r' +\((?P<originator>[0-9\.]+)\))$')
@@ -1373,6 +1376,9 @@ class ShowBgpDetailSuperParser(ShowBgpAllDetailSchema):
                     if group['next_hop_igp_metric']:
                         subdict['next_hop_igp_metric'] = group['next_hop_igp_metric']
 
+                    if group['next_hop_link_local']:
+                        subdict['next_hop_link_local'] = group['next_hop_link_local']
+
                     if group['inaccessible']:
                         subdict['inaccessible'] = True
                     else:
@@ -1396,6 +1402,9 @@ class ShowBgpDetailSuperParser(ShowBgpAllDetailSchema):
 
                     if group['next_hop_igp_metric']:
                         subdict['next_hop_igp_metric'] = group['next_hop_igp_metric']
+
+                    if group['next_hop_link_local']:
+                        subdict['next_hop_link_local'] = group['next_hop_link_local']
 
                     if group['next_hop_via']:
                         subdict['next_hop_via'] = group['next_hop_via']

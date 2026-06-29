@@ -35,6 +35,7 @@ IOSXE parsers for the following show commands:
     * 'show diagnostics status'
     * 'test platform software database get-n all ios_oper/platform_component'
     * 'test platform software database get-n all ios_oper/transceiver'
+    * 'show rep topology'
     * 'show rep topology detail'
     * 'show xdr linecard'
     * 'show zone-pair security'
@@ -1839,6 +1840,11 @@ class ShowRedundancyStatesSchema(MetaParser):
         'client_count': int,
         'client_notification_tmr_msec': int,
         Optional('rf_debug_mask'): str,
+        Optional('current_client'): str,
+        Optional('current_client_id'): int,
+        Optional('time_since_progression_msec'): int,
+        Optional('history_progression'): str,
+        Optional('history_rc'): int,
     }
 
 
@@ -1905,6 +1911,18 @@ class ShowRedundancyStates(ShowRedundancyStatesSchema):
         # RF debug mask = 0x0
         p14 = re.compile(r'^RF +debug +mask += +(?P<rf_debug_mask>[\w]+)$')
 
+        # Current client in progression               = Igmp Snooping (506)
+        p15 = re.compile(r'^Current +client +in +progression += +'
+                        r'(?P<current_client>.+?)\s*\((?P<current_client_id>\d+)\)\s*$')
+        
+        # Time since client was sent progression (ms) = 3228
+        p16 = re.compile(r'^Time +since +client +was +sent +progression +\(ms\) += +'
+                        r'(?P<time_since_progression_msec>\d+)\s*$')
+        
+        # History for this client progression         = RF_PROG_STANDBY_BULK, rc 0
+        p17 = re.compile(r'^History +for +this +client +progression += +'
+                        r'(?P<history_progression>.+?)(?:,\s*rc\s+(?P<history_rc>\d+))?\s*$')
+        
         for line in out.splitlines():
             line = line.strip()
             if not line:
@@ -2011,6 +2029,27 @@ class ShowRedundancyStates(ShowRedundancyStatesSchema):
                 ret_dict['rf_debug_mask'] = m.groupdict()['rf_debug_mask']
                 continue
 
+            # Current client in progression = Igmp Snooping (506)
+            m = p15.match(line)
+            if m:
+                ret_dict['current_client'] = m.groupdict()['current_client'].strip()
+                ret_dict['current_client_id'] = int(m.groupdict()['current_client_id'])
+                continue
+        
+            # Time since client was sent progression (ms) = 3228
+            m = p16.match(line)
+            if m:
+                ret_dict['time_since_progression_msec'] = int(
+                    m.groupdict()['time_since_progression_msec'])
+                continue
+        
+            # History for this client progression = RF_PROG_STANDBY_BULK, rc 0
+            m = p17.match(line)
+            if m:
+                ret_dict['history_progression'] = m.groupdict()['history_progression'].strip()
+                if m.groupdict()['history_rc'] is not None:
+                    ret_dict['history_rc'] = int(m.groupdict()['history_rc'])
+                continue
         return ret_dict
 
 
@@ -4107,11 +4146,11 @@ class ShowModuleSchema(MetaParser):
                         'card_type':str,
                         'model':str,
                         'serial':str,
-                        'mac_address':str,
-                        'hw':str,
-                        'fw':str,
-                        'sw':str,
-                        'status':str,
+                        Optional('mac_address'):str,
+                        Optional('hw'):str,
+                        Optional('fw'):str,
+                        Optional('sw'):str,
+                        Optional('status'):str,
                         Optional('redundancy_role'):str,
                         Optional('operating_redundancy_mode'):str,
                         Optional('configured_redundancy_mode'):str
@@ -7156,7 +7195,7 @@ class ShowPlatformPktTraceSummarySchema(MetaParser):
                 'output_intf': str,
                 'state': str,
                 Optional('reason'): {
-                    'code': int,
+                    'code': Any(),
                     'text': str
                 }
             }
@@ -7180,7 +7219,7 @@ class ShowPlatformPacketSumm(ShowPlatformPktTraceSummarySchema):
         # Pkt   Input            Output           State  Reason
         # 0     Gi0/0/1          Gi0/0/0          FWD     97  (Packets to LFTS)
         p = re.compile(r'\s*(?P<pkt>\d+)\s+(?P<input>\S+)\s+(?P<output>\S+)'
-                       r'\s+(?P<state>\S+)(\s+(?P<reason_code>\d+)\s+(?P<reason_str>.*$))?')
+                       r'\s+(?P<state>\S+)(?:\s+(?P<reason_code>\d+)\s+(?P<reason_str>.*$)|\s+(?P<reason_text>.+$))?')
 
         for line in output.splitlines():
             m = p.match(line)
@@ -7195,7 +7234,7 @@ class ShowPlatformPacketSumm(ShowPlatformPktTraceSummarySchema):
                     }
                 })
 
-                # add the reason code if matched
+                # add the reason code and text if matched (code + text)
                 reason_code = groups['reason_code'] or None
                 if reason_code is not None:
                     reason_code = int(reason_code)
@@ -7203,6 +7242,14 @@ class ShowPlatformPacketSumm(ShowPlatformPktTraceSummarySchema):
                         'reason': {
                             'code': reason_code,
                             'text': groups['reason_str']
+                        },
+                    })
+                # add the reason text only if matched (text only, no code)
+                elif groups['reason_text']:
+                    ret_dict['packets'][pkt_num].update({
+                        'reason': {
+                            'code': '',
+                            'text': groups['reason_text']
                         },
                     })
         return ret_dict
@@ -8962,7 +9009,7 @@ class ShowXfsuEligibilitySchema(MetaParser):
         'reload_fast_supported': str,
         Optional('reload_fast_platform_stauts'): str,
         Optional('xfsu_platform_stauts'): str,
-        'stack_configuration': str,
+        Optional('stack_configuration'): str,
         'eligibility_check': {
             Any(): {
                 'status': str
@@ -8990,7 +9037,8 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
             output = self.device.execute(self.cli_command)
 
         # Reload fast supported: Yes
-        p1 = re.compile(r'^Reload fast supported: (?P<reload_fast_supported>\w+)$')
+        # xFSU supported:                          Yes
+        p1 = re.compile(r'^(?:Reload fast supported|xFSU supported):\s+(?P<reload_fast_supported>\w+)$')
 
         # Reload Fast PLATFORM Status: Not started yet
         p2 = re.compile(r'^Reload Fast PLATFORM Status: (?P<platform_status>[\w\s]+)$')
@@ -9005,10 +9053,11 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
         # Network Advantage License Yes
         # Full ring stack           Yes
         # Check macsec eligibility  Eligible
-        p4 = re.compile(r'^(?P<eligibility_check>[\w+ ]+) +(?P<status>Yes|No|Eligible|Ineligible)$')
+        p4 = re.compile(r'^(?P<eligibility_check>[\w\s]+?):?\s+(?P<status>Yes|No|Eligible|Ineligible|ELIGIBLE|INELIGIBLE)$')
 
         # Spanning Tree             Ineligible:Root Switch with forwarding link:VLAN0069
-        p5 = re.compile(r'^Spanning Tree\s+(?P<spanning_tree>\w+):(?P<status>[\w ]+):(?P<forwarding_link>\S+)$')
+        # Spanning Tree:                           Eligible
+        p5 = re.compile(r'^Spanning Tree:?\s+(?P<spanning_tree>\w+)(?::(?P<status>[\w ]+):(?P<forwarding_link>\S+))?$')
 
         # xFSU PLATFORM Status: Not started yet
         p6 = re.compile(r'^xFSU PLATFORM Status: (?P<xfsu_platform_stauts>[\w\s]+)$')
@@ -9048,10 +9097,10 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
             if m:
                 group = m.groupdict()
                 root_dict = ret_dict.setdefault('eligibility_check',{})
-                if group['eligibility_check'] != 'Eligibility Check':
-                    if group['status'] != 'Status':
-                        check_dict = root_dict.setdefault(group['eligibility_check'].lower().strip().replace(" ","_"),{})
-                        check_dict['status'] = group['status']
+                check_name = group['eligibility_check'].lower().strip().replace(" ","_")
+                if check_name != 'xfsu_eligibility':
+                    check_dict = root_dict.setdefault(check_name,{})
+                    check_dict['status'] = group['status'].capitalize()
                 continue
 
             # Spanning Tree             Ineligible:Root Switch with forwarding link:VLAN0069
@@ -9060,8 +9109,9 @@ class ShowXfsuEligibility(ShowXfsuEligibilitySchema):
                 group = m.groupdict()
                 root_dict = ret_dict.setdefault('eligibility_check',{})
                 spanning_dict = root_dict.setdefault('spanning_tree',{})
-                spanning_dict['status'] = group['spanning_tree']
-                spanning_dict[group['status'].lower().strip().replace(" ","_")] = group['forwarding_link']
+                spanning_dict['status'] = group['spanning_tree'].capitalize()
+                if group.get('status') and group.get('forwarding_link'):
+                    spanning_dict[group['status'].lower().strip().replace(" ","_")] = group['forwarding_link']
                 continue
 
             # xFSU PLATFORM Status: Not started yet
@@ -9807,6 +9857,89 @@ class ShowPlatformSoftwareFedSwitchAclUsageIncludeAcl(ShowPlatformSoftwareFedSwi
 
         return ret_dict
 
+class ShowRepTopologySchema(MetaParser):
+    """Schema for show rep topology"""
+
+    schema = {
+        'segment': {
+            Any(): {
+                'interfaces': {
+                    Any(): {
+                        'port': str,
+                        'bridge': str,
+                        Optional('edge'): str,
+                        'role': str
+                    }
+                }
+            }
+        }
+    }
+
+class ShowRepTopology(ShowRepTopologySchema):
+    """
+    show rep topology
+    """
+
+    cli_command = 'show rep topology'
+
+    def cli(self, output=None):
+
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+
+        current_segment = None
+
+        # REP Segment 1
+        p1 = re.compile(r'^REP Segment (?P<segment>\d+)$')
+
+        # C9200_DUT                        Gi1/0/1    Pri* Open
+        # C9200_DUT                        Gi1/0/2    Sec* Alt
+        # IE34001                          Gi1/2           Open
+        p2 = re.compile(
+            r'^(?P<bridge>\S+)\s+'
+            r'(?P<interface>[A-Za-z][A-Za-z0-9-]*\d+(?:/\d+)*(?:\.\d+)?)\s+'
+            r'((?P<edge>\S+)\s+)?'
+            r'(?P<role>\S+)$'
+        )
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # REP Segment 1
+            m = p1.match(line)
+            if m:
+                current_segment = int(m.groupdict()['segment'])
+                ret_dict.setdefault('segment', {}).setdefault(current_segment, {})
+                continue
+
+            # BridgeName                       PortName   Edge Role
+            # -------------------------------- ---------- ---- ----
+            if line.startswith('BridgeName') or line.startswith('-'):
+                continue
+
+            # C9200_DUT                        Gi1/0/1    Pri* Open
+            m = p2.match(line)
+            if m and current_segment is not None:
+                group = m.groupdict()
+                interface = Common.convert_intf_name(group.pop('interface'))
+                intf_dict = (
+                    ret_dict
+                    .setdefault('segment', {})
+                    .setdefault(current_segment, {})
+                    .setdefault('interfaces', {})
+                    .setdefault(interface, {})
+                )
+                intf_dict['port'] = interface
+                intf_dict['bridge'] = group['bridge']
+                intf_dict['role'] = group['role']
+                if group.get('edge'):
+                    intf_dict['edge'] = group['edge']
+        
+        return ret_dict
 
 # ====================================================
 #  Schema for :
@@ -13348,3 +13481,235 @@ class ShowPlatformSoftwareInfrastructureThreadFastpath(ShowPlatformSoftwareInfra
                 continue
 
         return result
+
+
+class ShowPlatformHardwareCppActiveFeatureNatDatapathSessDumpSchema(MetaParser):
+    '''Schema for show platform hardware cpp active feature nat datapath sess-dump'''
+    schema = {
+        'nat_sessions': {
+            Any(): {  # Session ID as key (e.g., '0x38c82d90')
+                'id': str,
+                'inside_original_ip': str,
+                'outside_original_ip': str,
+                'inside_original_port': int,
+                'outside_original_port': int,
+                'inside_translated_ip': str,
+                'outside_translated_ip': str,
+                'inside_translated_port': int,
+                'outside_translated_port': int,
+                'protocol': int,
+                'vrf': int,
+                'table_id': int,
+                'bucket': int,
+                'inside_interface': int,
+                'outside_interface': int,
+                'ext_flags': str,
+                'in_packets': int,
+                'in_bytes': int,
+                'out_packets': int,
+                'out_bytes': int,
+                'flowdb_in2out_fh': str,
+                'flowdb_out2in_fh': str,
+            }
+        }
+    }
+
+class ShowPlatformHardwareCppActiveFeatureNatDatapathSessDump(ShowPlatformHardwareCppActiveFeatureNatDatapathSessDumpSchema):
+    '''Parser for show platform hardware cpp active feature nat datapath sess-dump'''
+    
+    cli_command = 'show platform hardware cpp active feature nat datapath sess-dump'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        result = {}
+
+        if output:
+            # id 0x38c82d90 io 5.0.0.2 oo 110.1.1.1 io 49186 oo 33438 it 110.100.1.1 ot 110.1.1.1 it 49186 ot 33438 pro 17 vrf 0 tableid 0 bck 3804 in_if 10 out_if 8 ext_flags 0x0 in_pkts 1 in_bytes 8 out_pkts 0 out_bytes 0 flowdb in2out fh 0x0 flowdb out2in fh 0x0
+            p0 = re.compile(r'^id\s+(?P<id>0x[0-9a-fA-F]+)\s+'
+                           r'io\s+(?P<io_ip>\d+\.\d+\.\d+\.\d+)\s+'
+                           r'oo\s+(?P<oo_ip>\d+\.\d+\.\d+\.\d+)\s+'
+                           r'io\s+(?P<io_port>\d+)\s+'
+                           r'oo\s+(?P<oo_port>\d+)\s+'
+                           r'it\s+(?P<it_ip>\d+\.\d+\.\d+\.\d+)\s+'
+                           r'ot\s+(?P<ot_ip>\d+\.\d+\.\d+\.\d+)\s+'
+                           r'it\s+(?P<it_port>\d+)\s+'
+                           r'ot\s+(?P<ot_port>\d+)\s+'
+                           r'pro\s+(?P<protocol>\d+)\s+'
+                           r'vrf\s+(?P<vrf>\d+)\s+'
+                           r'tableid\s+(?P<tableid>\d+)\s+'
+                           r'bck\s+(?P<bucket>\d+)\s+'
+                           r'in_if\s+(?P<in_if>\d+)\s+'
+                           r'out_if\s+(?P<out_if>\d+)\s+'
+                           r'ext_flags\s+(?P<ext_flags>0x[0-9a-fA-F]+)\s+'
+                           r'in_pkts\s+(?P<in_pkts>\d+)\s+'
+                           r'in_bytes\s+(?P<in_bytes>\d+)\s+'
+                           r'out_pkts\s+(?P<out_pkts>\d+)\s+'
+                           r'out_bytes\s+(?P<out_bytes>\d+)\s+'
+                           r'flowdb\s+in2out\s+fh\s+(?P<in2out_fh>0x[0-9a-fA-F]+)\s+'
+                           r'flowdb\s+out2in\s+fh\s+(?P<out2in_fh>0x[0-9a-fA-F]+)')
+
+            # Process each line
+            for line in output.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Since the output has duplicated entries on the same line,
+                # we need to split the line and process each part
+                # Look for patterns that start with 'id 0x'
+                parts = re.split(r'(?=id\s+0x)', line)
+                
+                for part in parts:
+                    part = part.strip()
+                    if not part:
+                        continue
+                    # id 0x38c82d90 io 5.0.0.2 oo 110.1.1.1 io 49186 oo 33438 it 110.100.1.1 ot 110.1.1.1 it 49186 ot 33438 pro 17 vrf 0 tableid 0 bck 3804 in_if 10 out_if 8 ext_flags 0x0 in_pkts 1 in_bytes 8 out_pkts 0 out_bytes 0 flowdb in2out fh 0x0 flowdb out2in fh 0x0
+                    m0 = p0.match(part)
+                    if m0:
+                        session_id = m0.group('id')
+                        
+                        # Initialize sessions dict if not exists
+                        if 'nat_sessions' not in result:
+                            result['nat_sessions'] = {}
+
+                        result['nat_sessions'][session_id] = {
+                            'id': session_id,
+                            'inside_original_ip': m0.group('io_ip'),
+                            'outside_original_ip': m0.group('oo_ip'),
+                            'inside_original_port': int(m0.group('io_port')),
+                            'outside_original_port': int(m0.group('oo_port')),
+                            'inside_translated_ip': m0.group('it_ip'),
+                            'outside_translated_ip': m0.group('ot_ip'),
+                            'inside_translated_port': int(m0.group('it_port')),
+                            'outside_translated_port': int(m0.group('ot_port')),
+                            'protocol': int(m0.group('protocol')),
+                            'vrf': int(m0.group('vrf')),
+                            'table_id': int(m0.group('tableid')),
+                            'bucket': int(m0.group('bucket')),
+                            'inside_interface': int(m0.group('in_if')),
+                            'outside_interface': int(m0.group('out_if')),
+                            'ext_flags': m0.group('ext_flags'),
+                            'in_packets': int(m0.group('in_pkts')),
+                            'in_bytes': int(m0.group('in_bytes')),
+                            'out_packets': int(m0.group('out_pkts')),
+                            'out_bytes': int(m0.group('out_bytes')),
+                            'flowdb_in2out_fh': m0.group('in2out_fh'),
+                            'flowdb_out2in_fh': m0.group('out2in_fh'),
+                        }
+
+        return result
+        
+# ==========================================================================
+# Schema for :
+#   * 'show platform software fed {switch} {mode} ipv6 route summary | include {match}'
+# ===========================================================================
+
+class ShowPlatformSoftwareFedIpv6RouteSummaryIncludeSchema(MetaParser):
+    """Schema for show platform software fed {switch} {mode} ipv6 route summary | include {match}"""
+    schema = {
+        'asic': {
+            Any(): {
+                'total_entries': int,
+            }
+        }
+    }
+# =====================================================================
+# Parser for:
+#   * 'show platform software fed {switch} {mode} ipv6 route summary | include {match}'
+# =====================================================================
+class ShowPlatformSoftwareFedIpv6RouteSummaryInclude(ShowPlatformSoftwareFedIpv6RouteSummaryIncludeSchema):
+    """Parser for show platform software fed {switch} {mode} ipv6 route summary | include {match}"""
+
+    cli_command = [
+        'show platform software fed {switch} {mode} ipv6 route summary | include {match}',
+        'show platform software fed {mode} ipv6 route summary | include {match}',
+    ]
+
+    def cli(self, mode, match, switch=None, output=None):
+        if output is None:
+            if switch:
+                cmd = self.cli_command[0].format(mode=mode, match=match, switch=switch)
+            else:
+                cmd = self.cli_command[1].format(mode=mode, match=match)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+
+        #Total number of v6 fib EM hw entries for device:0 = 2
+        p1 = re.compile(r'^Total number of v6 fib EM hw entries for device:(?P<asic>\d+) = (?P<total_entries>\d+)$')
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            #Total number of v6 fib EM hw entries for device:0 = 2
+            m = p1.match(line)
+            if m:
+                asic = m.group('asic')
+                asic = int(asic)
+                total_entries = int(m.group('total_entries'))
+                asic_dict = ret_dict.setdefault('asic', {}).setdefault(asic, {})
+                asic_dict['total_entries'] = total_entries
+                continue
+
+        return ret_dict
+
+class ShowPlatformConditionsSchema(MetaParser):
+    """Schema for show platform conditions"""
+    schema = {
+        "platform_conditions": {
+            Optional("system_status"): str,
+            Optional("conditions"): {
+                Any(): {
+                    "state": str,
+                    "details": str
+                }
+            }
+        }
+    }
+
+
+class ShowPlatformConditions(ShowPlatformConditionsSchema):
+    """Parser for show platform conditions"""
+    cli_command = "show platform conditions"
+
+    def cli(self, output=None):
+        if output is None:
+            out = self.device.execute(self.cli_command)
+        else:
+            out = output
+
+        ret_dict = {}
+
+        # CPU Utilization High               FALSE        Normal
+        p1 = re.compile(r'^(?P<condition>.+?)\s+(?P<state>TRUE|FALSE)\s+(?P<details>.+)$')
+
+        # System Status : HEALTHY
+        p2 = re.compile(r'^\s*System\s+Status\s*:\s*(?P<system_status>\S+)\s*$')
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # CPU Utilization High               FALSE        Normal
+            m = p1.match(line)
+            if m:
+                platform_dict = ret_dict.setdefault("platform_conditions", {})
+                conditions_dict = platform_dict.setdefault("conditions", {})
+                condition_name = m.group("condition").strip()
+                conditions_dict[condition_name] = {
+                    "state": m.group("state"),
+                    "details": m.group("details").strip()
+                }
+                continue
+
+            # System Status : HEALTHY
+            m = p2.match(line)
+            if m:
+                platform_dict = ret_dict.setdefault("platform_conditions", {})
+                platform_dict["system_status"] = m.group("system_status")
+                continue
+
+        return ret_dict

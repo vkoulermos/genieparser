@@ -1,0 +1,43 @@
+show subscriber service
+
+example 1:
+  Service "l4rdt":
+        Profile name: l4rdt, 2 references
+          password             0   <hidden>
+          username             0   "l4rdt"
+          traffic-class        0   "input access-group name isg_acl4"
+          traffic-class        0   "output access-group name isg_acl4"
+          l4redirect           0   "redirect to ip 10.1.1.1 port 1000 duration 100 frequency 100"
+          accounting-list      0   "AAA_LIST"
+
+    Class Id  In: 00000050
+    Class Id Out: 00000051
+
+  Service "l4rdt(l4addr=11.1.1.1,l4dur=500)":
+        Profile name: l4rdt(l4addr=11.1.1.1,l4dur=500), 3 references
+          password             0   <hidden>
+          username             0   "l4rdt"
+          traffic-class        0   "input access-group name isg_acl4"
+          traffic-class        0   "output access-group name isg_acl4"
+          accounting-list      0   "AAA_LIST"
+          l4redirect           0   "redirect to ip 11.1.1.1 port 1000 duration 500 frequency 100"
+
+    Class Id  In: 00000052
+    Class Id Out: 00000053
+
+Current Subscriber Information using service "l4rdt(l4addr=11.1.1.1,l4dur=500)"
+Total sessions: 1
+
+Codes: Lterm - Local Term, Fwd - forwarded, unauth - unathenticated, authen -
+authenticated, TC Ct. - Number of Traffic Classes on the main session
+
+Uniq ID Interface    State    Service     Up-time  TC Ct. Identifier
+22      Vi1.1        authen   Lterm       00:00:15 1      qinq_customer
+
+example 2:
+Service "l4rdt":
+  Service "isg_acct1":
+  Service "l4rdt(l4addr=33.1.1.1,l4dur=300)":
+Uniq ID Interface    State    Service     Up-time  TC Ct. Identifier
+  Service "isg_acct1(tc_in=isg_acl2,tc_in=isg_acl3)":
+Uniq ID Interface    State    Service     Up-time  TC Ct. Identifier

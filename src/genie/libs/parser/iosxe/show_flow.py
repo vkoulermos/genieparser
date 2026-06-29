@@ -239,7 +239,6 @@ class ShowFlowMonitor(ShowFlowMonitorSchema):
     
         return ret_dict
 
-
 # =========================================================
 # Schema for 'show flow monitor {name} cache'
 # =========================================================
@@ -255,7 +254,7 @@ class ShowFlowMonitorCacheSchema(MetaParser):
         'current_entries': int,
         Optional('high_water_mark'): int,
         'flows_added': int,
-        'flows_aged': {
+        Optional('flows_aged'): {
             'total': int,
             Optional('active_timeout_secs'): int,
             Optional('active_timeout'): int,
@@ -291,16 +290,27 @@ class ShowFlowMonitorCacheSchema(MetaParser):
                 Optional('counter_pkts_long'): int,
                 Optional('timestamp_abs_first'): str,
                 Optional('timestamp_abs_last'): str,
+                Optional('timestamp_first'): str,
+                Optional('timestamp_last'): str,
+                Optional('flow_sampler'): int,
+                Optional('src_as'): int,
+                Optional('dst_as'): int,
                 Optional('fw_fw_event'): int,
                 Optional('datalink_ethertype'): str,
                 Optional('datalink_vlan_input'): str,
                 Optional('datalink_mac_src_input'): str,
                 Optional('datalink_mac_dst_input'): str,
                 Optional('interface_input'): str,
+                Optional('interface_output'): str,
                 Optional('datalink_mac_dst_output'): str,
                 Optional('connection_initiator'): str,
                 Optional('connection_server_nw_bytes_counter'): int,
                 Optional('connection_client_nw_bytes_counter'): int,
+                Optional('mpls_label_1'): str,
+                Optional('mpls_label_1_ttl'): int,
+                Optional('mpls_label_1_exp_bits'): int,
+                Optional('mpls_label_1_type'): int,
+                Optional('ipv4_pw_dst_addr'): str,
             },
         },
         Optional('proto_entries'): {
@@ -339,23 +349,20 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
         # Init vars
         ret_dict = {}
         index = 0
-        match = {}
         entry_dict = {}
 
-        # entry_dict intializes on p8 or p9 condition
-        # but some output doesn't match these conditions.
-        # this variable checks the entry_dict created
-        entry_dict_created = False
-
-        def check_match(val):
-            nonlocal entry_dict_created, index
-            if entry_dict_created:
-                if match.get(val):
-                    index += 1
-            else:
-                index += 1
-                entry_dict_created = True
-                match.update({val: 1})
+        # Some fields (e.g. IPV4 SOURCE ADDRESS, IPV6 SOURCE ADDRESS,
+        # DATALINK ETHERTYPE, DATALINK MAC SOURCE ADDRESS INPUT) mark the
+        # start of an entry block. When such a field reappears, it means a
+        # new entry has begun. The helper below uses the entry dict itself
+        # as the source of truth -- no shared mutable closure state -- and
+        # returns the (entry_dict, index) pair the caller should now use.
+        def next_entry(entries_parent, current_entry, current_index, field_name):
+            if not current_entry or field_name in current_entry:
+                current_index += 1
+                current_entry = entries_parent.setdefault(
+                    'entries', {}).setdefault(current_index, {})
+            return current_entry, current_index
 
         # Cache type:                               Normal (Platform cache)
         p1 = re.compile(r'^Cache +type: +(?P<cache_type>[\S\s]+)$')
@@ -393,10 +400,12 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
         p9 = re.compile(r'^IP VRF ID INPUT: +(?P<id>[\S\s]+)$')
 
         # IPV4 SOURCE ADDRESS:       192.168.189.254
-        p10 = re.compile(r'^IPV4 SOURCE ADDRESS: +(?P<src>\S+)$')
+        # ipv4 source address:        106.0.0.2
+        p10 = re.compile(r'^IPV4 SOURCE ADDRESS: +(?P<src>\S+)$', re.IGNORECASE)
 
         # IPV4 DESTINATION ADDRESS:  192.168.189.253
-        p11 = re.compile(r'^IPV4 DESTINATION ADDRESS: +(?P<dst>\S+)$')
+        # ipv4 destination address:  107.0.0.2
+        p11 = re.compile(r'^IPV4 DESTINATION ADDRESS: +(?P<dst>\S+)$', re.IGNORECASE)
 
         # interface input:           Null
         p12 = re.compile(r'^interface input: +(?P<input>\S+)$')
@@ -432,7 +441,8 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
         p22 = re.compile(r'^VXLAN VXLAN VTEP OUTPUT: +(?P<vxlan_vtep_output>\S+)$')
 
         # IP PROTOCOL:               1
-        p23 = re.compile(r'^IP PROTOCOL: +(?P<ip_protocol>\d+)$')
+        # ip protocol:               17
+        p23 = re.compile(r'^IP PROTOCOL: +(?P<ip_protocol>\d+)$', re.IGNORECASE)
 
         # ipv4 next hop address:     0.0.0.0
         p24 = re.compile(r'^ipv4 next hop address: +(?P<ipv4_nxt_hop>\S+)$')
@@ -444,10 +454,29 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
         p26 = re.compile(r'^ipv4 destination mask: +(?P<ipv4_dst_mask>\S+)$')
 
         # tcp flags:                 0x00
-        p27 = re.compile(r'^tcp flags: +(?P<tcp_flags>\S+)$')
+        # TCP FLAGS:                 0x10
+        p27 = re.compile(r'^tcp flags: +(?P<tcp_flags>\S+)$', re.IGNORECASE)
+
+        # MPLS LABEL 1 TTL:           255
+        p_mpls_ttl = re.compile(r'^MPLS LABEL 1 TTL: +(?P<mpls_label_1_ttl>\d+)$', re.IGNORECASE)
+
+        # MPLS LABEL 1 EXPERIMENTAL-BITS:  6
+        p_mpls_exp = re.compile(r'^MPLS LABEL 1 EXPERIMENTAL-BITS: +(?P<mpls_label_1_exp_bits>\d+)$', re.IGNORECASE)
+
+        # MPLS LABEL 1 TYPE:          0
+        p_mpls_type = re.compile(r'^MPLS LABEL 1 TYPE: +(?P<mpls_label_1_type>\d+)$', re.IGNORECASE)
+
+        # MPLS LABEL 1:               6001   /6*
+        p_mpls_label = re.compile(r'^MPLS LABEL 1: +(?P<mpls_label_1>\S+(?: +\S+)*)$', re.IGNORECASE)
+
+        # IPV4 PW DEST ADDRESS:       0.0.0.0
+        p_pw_dst = re.compile(r'^IPV4 PW DEST ADDRESS: +(?P<ipv4_pw_dst_addr>\S+)$', re.IGNORECASE)
 
         # counter bytes long:        192
         p28 = re.compile(r'^counter bytes long: +(?P<counter_bytes>\d+)$')
+        
+        # counter bytes:             54700 (short format without "long")
+        p28_short = re.compile(r'^counter bytes: +(?P<counter_bytes>\d+)$')
 
         # counter packets long:      3
         p29 = re.compile(r'^counter packets long: +(?P<counter_pkts_long>\S+)$')
@@ -457,9 +486,25 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
 
         # timestamp abs last:        07:50:58.900
         p31 = re.compile(r'^timestamp abs last: +(?P<timestamp_abs_last>\S+)$')
+        
+        # timestamp first:           21:27:54.059 (short format without "abs")
+        p30_short = re.compile(r'^timestamp first: +(?P<timestamp_first>\S+)$')
+
+        # timestamp last:            22:13:24.055 (short format without "abs")
+        p31_short = re.compile(r'^timestamp last: +(?P<timestamp_last>\S+)$')
 
         # IP TOS:                     0x14
-        p32 = re.compile(r'^IP TOS:\s+(?P<ip_tos>\S+)$')
+        # ip tos:                     0xB4
+        p32 = re.compile(r'^IP TOS:\s+(?P<ip_tos>\S+)$', re.IGNORECASE)
+        
+        # FLOW SAMPLER ID:           0
+        p32_flow_sampler = re.compile(r'^FLOW SAMPLER ID: +(?P<flow_sampler>\d+)$', re.IGNORECASE)
+        
+        # ip source as:              0
+        p32_src_as = re.compile(r'^ip source as: +(?P<src_as>\d+)$', re.IGNORECASE)
+        
+        # ip destination as:         0
+        p32_dst_as = re.compile(r'^ip destination as: +(?P<dst_as>\d+)$', re.IGNORECASE)
 
         #fw fw event:                 1
         p33 = re.compile(r'^fw fw event: +(?P<fw_fw_event>\S+)$')
@@ -478,6 +523,9 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
 
         # INTERFACE INPUT:                         Po31
         p38 = re.compile(r'^INTERFACE INPUT:\s+(?P<interface_input>[\w\.\/]+)$')
+
+        # INTERFACE OUTPUT:                        Gi0/1/4
+        p38a = re.compile(r'^INTERFACE OUTPUT:\s+(?P<interface_output>[\w\.\/]+)$')
 
         # DATALINK MAC DESTINATION ADDRESS OUTPUT:  1000.0E2A.4F57
         p39 = re.compile(r'^DATALINK MAC DESTINATION ADDRESS OUTPUT:\s+(?P<datalink_mac_dst_output>[\w\s\.]+)$')
@@ -562,7 +610,6 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 entry_dict.update({'intf_input': Common.convert_intf_name(group['intf_input'])})
                 entry_dict.update({'intf_output': Common.convert_intf_name(group['intf_output'])})
                 entry_dict.update({'pkts': int(group['pkts'])})
-                entry_dict_created = True
                 continue
 
             # 30.1.1.6         224.0.0.5                    0              0       89
@@ -576,7 +623,6 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 entry_dict.update({'src_port': int(group['src_port'])})
                 entry_dict.update({'dst_port': int(group['dst_port'])})
                 entry_dict.update({'ip_port': int(group['ip_port'])})
-                entry_dict_created = True
                 continue
 
             # IP VRF ID INPUT:           0          (DEFAULT)
@@ -586,23 +632,21 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 group = m.groupdict()
                 entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})
                 entry_dict.update({'ip_vrf_id_input': group['id']})
-                entry_dict_created = True
                 continue
 
             # IPV4 SOURCE ADDRESS:       192.168.189.254
             m = p10.match(line)
             if m:
-                group = m.groupdict()
-                check_match("ipv4")
-                entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})
-                entry_dict.update({'ipv4_src_addr': group['src']})
+                entry_dict, index = next_entry(ret_dict, entry_dict, index, 'ipv4_src_addr')
+                entry_dict['ipv4_src_addr'] = m.group('src')
                 continue
 
             # IPV4 DESTINATION ADDRESS:  192.168.189.253
+            # ipv4 destination address:  107.0.0.2
             m = p11.match(line)
             if m:
-                group = m.groupdict()
-                entry_dict.update({'ipv4_dst_addr': group['dst']})
+                entry_dict, index = next_entry(ret_dict, entry_dict, index, 'ipv4_dst_addr')
+                entry_dict['ipv4_dst_addr'] = m.group('dst')
                 continue
 
             # interface input:           Null
@@ -629,10 +673,8 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
             # IPV6 SOURCE ADDRESS:  BBBB:172:51:15::11
             m = p15.match(line)
             if m:
-                group = m.groupdict()
-                check_match("ipv6")
-                entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})
-                entry_dict.update({'ipv6_src_addr': group['ipv6_src_addr']})
+                entry_dict, index = next_entry(ret_dict, entry_dict, index, 'ipv6_src_addr')
+                entry_dict['ipv6_src_addr'] = m.group('ipv6_src_addr')
                 continue
 
             # IPV6 DESTINATION ADDRESS:  BBBB:172:51:15::111
@@ -714,14 +756,57 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 continue
 
             # tcp flags:                 0x00
+            # TCP FLAGS:                 0x10
             m = p27.match(line)
             if m:
                 group = m.groupdict()
                 entry_dict.update({'tcp_flags': group['tcp_flags']})
                 continue
 
+            # MPLS LABEL 1 TTL:           255
+            m = p_mpls_ttl.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'mpls_label_1_ttl': int(group['mpls_label_1_ttl'])})
+                continue
+
+            # MPLS LABEL 1 EXPERIMENTAL-BITS:  6
+            m = p_mpls_exp.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'mpls_label_1_exp_bits': int(group['mpls_label_1_exp_bits'])})
+                continue
+
+            # MPLS LABEL 1 TYPE:          0
+            m = p_mpls_type.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'mpls_label_1_type': int(group['mpls_label_1_type'])})
+                continue
+
+            # MPLS LABEL 1:               6001   /6*
+            m = p_mpls_label.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'mpls_label_1': group['mpls_label_1']})
+                continue
+
+            # IPV4 PW DEST ADDRESS:       0.0.0.0
+            m = p_pw_dst.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'ipv4_pw_dst_addr': group['ipv4_pw_dst_addr']})
+                continue
+
             # counter bytes long:        4991616
             m = p28.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'counter_bytes': int(group['counter_bytes'])})
+                continue
+
+            # counter bytes:             54700 (short format without "long")
+            m = p28_short.match(line)
             if m:
                 group = m.groupdict()
                 entry_dict.update({'counter_bytes': int(group['counter_bytes'])})
@@ -748,11 +833,46 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 entry_dict.update({'timestamp_abs_last': group['timestamp_abs_last']})
                 continue
             
+            # timestamp first:           21:27:54.059 (short format without "abs")
+            m = p30_short.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'timestamp_first': group['timestamp_first']})
+                continue
+            
+            # timestamp last:            22:13:24.055 (short format without "abs")
+            m = p31_short.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'timestamp_last': group['timestamp_last']})
+                continue
+            
             # IP TOS:                     0x14
             m = p32.match(line)
             if m:
                 group = m.groupdict()
                 entry_dict.update({'ip_tos': group['ip_tos']})
+                continue
+            
+            # FLOW SAMPLER ID:           0
+            m = p32_flow_sampler.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'flow_sampler': int(group['flow_sampler'])})
+                continue
+            
+            # ip source as:              0
+            m = p32_src_as.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'src_as': int(group['src_as'])})
+                continue
+            
+            # ip destination as:         0
+            m = p32_dst_as.match(line)
+            if m:
+                group = m.groupdict()
+                entry_dict.update({'dst_as': int(group['dst_as'])})
                 continue
 
             #fw fw event:                 1
@@ -764,29 +884,24 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
 
             #DATALINK ETHERTYPE:                      0xFFFF
             m = p34.match(line)
-            if m:        
-                group = m.groupdict()
-                check_match("datalink_eth")
-                entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})      
-                entry_dict.update({'datalink_ethertype': group['datalink_ethertype']})
+            if m:
+                entry_dict, index = next_entry(ret_dict, entry_dict, index, 'datalink_ethertype')
+                entry_dict['datalink_ethertype'] = m.group('datalink_ethertype')
                 continue
-                            
+
             # DATALINK VLAN INPUT:                     0
             m = p35.match(line)
             if m:
-                group = m.groupdict()
-                entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})       
-                entry_dict.update({'datalink_vlan_input': group['datalink_vlan_input']})
-                entry_dict_created = True
+                if not entry_dict:
+                    entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})
+                entry_dict['datalink_vlan_input'] = m.group('datalink_vlan_input')
                 continue
-        
+
             # DATALINK MAC SOURCE ADDRESS INPUT:       0011.0000.0010
             m = p36.match(line)
             if m:
-                group = m.groupdict()
-                check_match("datalink_mac_source")
-                entry_dict = ret_dict.setdefault('entries', {}).setdefault(index, {})
-                entry_dict.update({'datalink_mac_src_input': group['datalink_mac_src_input']})
+                entry_dict, index = next_entry(ret_dict, entry_dict, index, 'datalink_mac_src_input')
+                entry_dict['datalink_mac_src_input'] = m.group('datalink_mac_src_input')
                 continue
 
             # DATALINK MAC DESTINATION ADDRESS INPUT:       0011.0000.0010
@@ -801,6 +916,15 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
             if m:
                 group = m.groupdict()
                 entry_dict.update({'interface_input': group['interface_input']})
+                continue
+
+            # INTERFACE OUTPUT:                        Gi0/1/4
+            m = p38a.match(line)
+            if m:
+                group = m.groupdict()
+                # Only save interface_output if interface_input was also present
+                if 'interface_input' in entry_dict:
+                    entry_dict.update({'interface_output': group['interface_output']})
                 continue
 
             # DATALINK MAC DESTINATION ADDRESS OUTPUT:    1000.0E2A.4F57
@@ -831,7 +955,7 @@ class ShowFlowMonitorCache(ShowFlowMonitorCacheSchema):
                 group = m.groupdict()
                 entry_dict.update({'connection_client_nw_bytes_counter': int(group['connection_client_nw_bytes_counter'])})
                 continue
-                
+
         return ret_dict
 
 class ShowFlowMonitorCacheRecord(ShowFlowMonitorCache):
@@ -2379,6 +2503,125 @@ class ShowFlowRecord(ShowFlowRecordSchema):
                 collect_field = group['collect_list']
                 collect_field_list = fields_dict.setdefault('collect_list', [])
                 collect_field_list.append(collect_field)
+                continue
+
+        return ret_dict
+
+
+# ===========================================
+# Schema for 'show flow record {record_name}'
+# ===========================================
+class ShowFlowRecordNameSchema(MetaParser):
+    """Schema for 'show flow record {record_name}'"""
+
+    schema = {
+        'flow_record_name': {
+            Any(): {
+                'description': str,
+                'no_of_users': int,
+                'total_field_space': int,
+                'fields': {
+                    Optional('match_list'): ListOf(str),
+                    Optional('collect_list'): ListOf(str),
+                }
+            }
+        }
+    }
+
+
+# ===========================================
+# Parser for 'show flow record {record_name}'
+# ===========================================
+class ShowFlowRecordName(ShowFlowRecordNameSchema):
+    """Parser for 'show flow record {record_name}'"""
+
+    cli_command = 'show flow record {record_name}'
+
+    def cli(self, record_name='', output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command.format(record_name=record_name))
+
+        # flow record mpls-bt:
+        p1 = re.compile(r'^flow\s+record\s+(?P<flow_record_name>.+):$')
+
+        # Description:        User defined
+        p2 = re.compile(r'^Description:\s+(?P<description>.+)$')
+
+        # No. of users:       1
+        p3 = re.compile(r'^No\.\s+of\s+users:\s+(?P<no_of_users>\d+)$')
+
+        # Total field space:  85 bytes
+        p4 = re.compile(r'^Total\s+field\s+space:\s+(?P<total_field_space>\d+)\s+bytes$')
+
+        # Fields:
+        p5 = re.compile(r'^Fields:$')
+
+        # match ipv4 ttl
+        # match mpls label 1 ttl
+        # match routing pw destination address
+        p6 = re.compile(r'^match\s+(?P<match_list>.+)$')
+
+        # collect ipv6 version
+        # collect counter bytes
+        # collect timestamp sys-uptime first
+        p7 = re.compile(r'^collect\s+(?P<collect_list>.+)$')
+
+        ret_dict = {}
+        flow_dict = {}
+        fields_dict = {}
+
+        for line in output.splitlines():
+            line = line.strip()
+
+            # flow record mpls-bt:
+            m = p1.match(line)
+            if m:
+                group = m.groupdict()
+                flow_record_name = group['flow_record_name']
+                flow_dict = ret_dict.setdefault('flow_record_name', {}).setdefault(flow_record_name, {})
+                continue
+
+            # Description:        User defined
+            m = p2.match(line)
+            if m:
+                group = m.groupdict()
+                flow_dict['description'] = group['description']
+                continue
+
+            # No. of users:       1
+            m = p3.match(line)
+            if m:
+                group = m.groupdict()
+                flow_dict['no_of_users'] = int(group['no_of_users'])
+                continue
+
+            # Total field space:  85 bytes
+            m = p4.match(line)
+            if m:
+                group = m.groupdict()
+                flow_dict['total_field_space'] = int(group['total_field_space'])
+                continue
+
+            # Fields:
+            m = p5.match(line)
+            if m:
+                fields_dict = flow_dict.setdefault('fields', {})
+                continue
+
+            # match ipv4 ttl
+            m = p6.match(line)
+            if m:
+                group = m.groupdict()
+                match_field_list = fields_dict.setdefault('match_list', [])
+                match_field_list.append(group['match_list'])
+                continue
+
+            # collect ipv6 version
+            m = p7.match(line)
+            if m:
+                group = m.groupdict()
+                collect_field_list = fields_dict.setdefault('collect_list', [])
+                collect_field_list.append(group['collect_list'])
                 continue
 
         return ret_dict

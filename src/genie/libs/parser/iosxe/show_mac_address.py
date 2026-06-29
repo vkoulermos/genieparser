@@ -155,7 +155,7 @@ class ShowMacAddressTableCountVlanSchema(MetaParser):
         'Total_dynamic_address_count': int,
         'Total_static_address_count': int,
         'Total_mac_address_in_use' : int,
-        'Total_mac_address_space' : int
+        Optional('Total_mac_address_space'): int
     }
 # ==========================================================
 #  Parser for 'show mac address-table count vlan {vlan_id}'
@@ -226,7 +226,7 @@ class ShowMacAddressTableCountSchema(MetaParser):
         'total_dynamic_address_count': int,
         'total_static_address_count': int,
         'total_mac_address_in_use': int,
-        'total_mac_address_space': int,
+        Optional('total_mac_address_space'): int,
     }
 
 class ShowMacAddressTableCount(ShowMacAddressTableCountSchema):

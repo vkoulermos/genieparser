@@ -36,6 +36,9 @@
     * show interfaces {interface} human-readable
     * show interfaces transceiver properties
     * show interfaces transceiver module {mod}
+    * show interfaces {interface} trunk
+    * show interfaces {interface} mac-accounting
+    * show interfaces mac-accounting
 """
 
 import os
@@ -72,6 +75,7 @@ from genie.metaparser.util.schemaengine import Schema, \
                                          Use
 # import parser utils
 from genie.libs.parser.utils.common import Common
+from genie.metaparser.util.exceptions import SchemaEmptyParserError
 
 logger = logging.getLogger(__name__)
 
@@ -3242,20 +3246,98 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
             out = output
 
         ret_dict = {}
-        ipv6 = False
+        intf = None
+        global_address = None
         joined_group = []
         # status code dict:
         status_code = {'ten': 'tentative',
                        'dep': 'duplicate',
                        'pre': 'preferre'}
+
+        # Vlan211 is up, line protocol is up
+        # GigabitEthernet1/0/1 is administratively down, line protocol is down
+        p1 = re.compile(r'^(?P<interface>[\w\/\.\-\:]+) +is +(?P<enabled>[\w\s]+), +line +protocol +is +(?P<oper_status>\w+)$')
+
+        # IPv6 is enabled, link-local address is FE80::257:D2FF:FE28:
+        # IPv6 is tentative, link-local address is FE80::257:D2FF:FEFF:428C [TEN]
+        # IPv6 is tentative, link-local address is FE80::257:D2FF:FEFF:428C [UNA/TEN]
+        p2 = re.compile(r'^IPv6 +is +(?P<status>\w+), +link-local +address +is +(?P<link_local>[\w\:]+)( *\[(?P<type>[\w\/]+)\])?$')
+
+        # FE80::5:73FF:FEA0:16 [UNA/OOD]
+        p21_1 = re.compile(r'^(?P<ipv6>[Ff][Ee][89AaBb][0-9A-Fa-f]:[\w\:]+)( *\[(?P<type>[\w\/]+)\])?$')
+
+        # Stateless address autoconfig enabled
+        p3 = re.compile(r'^Stateless +address +autoconfig +enabled$')
+
+        #   2001:10::14:1, subnet is 2001:10::14:0/112
+        #   2001:DB8:3:3::3, subnet is 2001:DB8:3:3::/64 [ANY/TEN]
+        p4_1 = re.compile(r'^(?P<ipv6>[\w\:]+), +subnet +is +(?P<dum1>(?P<dum2>[\w\:]+)\/(?P<prefix_length>[0-9]+))( *\[(?P<type>[\w\/]+)\])?$')
+
+        #     valid lifetime 2591911 preferred lifetime 604711
+        p4_2 = re.compile(r'^valid +lifetime +(?P<valid>\d+) +preferred +lifetime +(?P<preferred>\d+)$')
+
+        #   FF02::1
+        p5_1 = re.compile(r'^(?P<address>[Ff]{2}[0-9A-Fa-f\:]+)$')
+
+        # MTU is 1500 bytes
+        p6 = re.compile(r'^MTU +is +(?P<mtu>\d+) +bytes$')
+
+        # VPN Routing/Forwarding "VRF1"
+        p6_1 = re.compile(r'^VPN +Routing\/Forwarding +\"(?P<vrf>[\w\-]+)\"$')
+
+        # ICMP error messages limited to one every 100 milliseconds
+        p7 = re.compile(r'^ICMP +error +messages +limited +to +one +every +(?P<limited>\d+) +milliseconds$')
+
+        # ICMP redirects are enabled
+        p8 = re.compile(r'^ICMP +redirects +are +(?P<status>\w+)$')
+
+        # ICMP unreachables are sent
+        p9 = re.compile(r'^ICMP +unreachables +are +(?P<status>[\w\s]+)$')
+
+        # ND DAD is enabled, number of DAD attempts: 1
+        p10 = re.compile(r'^ND +DAD +is +(?P<status>\w+), +number +of +DAD +attempts: +(?P<attempts>\d+)$')
+
+        # ND reachable time is 30000 milliseconds (using 30000)
+        p11 = re.compile(r'^ND +reachable +time +is (?P<time>\d+) +milliseconds +\(using +(?P<use>\d+)\)$')
+
+        # ND NS retransmit interval is 1000 milliseconds
+        p12 = re.compile(r'^ND +NS +retransmit +interval +is +(?P<interval>\d+) +milliseconds$')
+
+        # ND advertised reachable time is 0 (unspecified)
+        p13 = re.compile(r'^ND +advertised +reachable +time +is +(?P<time>\d+) +\((?P<dummy>\S+)\)$')
+
+        # ND advertised retransmit interval is 0 (unspecified)
+        p14 = re.compile(r'^ND +advertised +retransmit +interval +is +(?P<time>\d+) +\((?P<dummy>\S+)\)$')
+
+        # ND router advertisements are sent every 200 seconds
+        p15 = re.compile(r'^ND +router +advertisements +are +sent +every +(?P<time>\d+) +seconds$')
+
+        # ND router advertisements live for 1800 seconds
+        p16 = re.compile(r'^ND +router +advertisements +live +for +(?P<time>\d+) +seconds$')
+
+        # ND advertised default router preference is Medium
+        p17 = re.compile(r'^ND +advertised +default +router +preference +is +(?P<prefer>\w+)$')
+
+        # ND RAs are suppressed (periodic)
+        p17_1 = re.compile(r'^ND +RAs +are +suppressed.*$')
+
+        # Hosts use stateless autoconfig for addresses.
+        p18 = re.compile(r'^Hosts +use +(?P<addr_conf_method>[\w\s]+) +for +addresses.$')
+
+        # Hosts use DHCP to obtain routable addresses.
+        p18_1 = re.compile(r'^Hosts +use +(?P<addr_conf_method>[\w\s]+) +to +obtain +routable +addresses.$')
+
+        # Interface is unnumbered. Using address of Loopback0
+        p19 = re.compile(r'^Interface +is +unnumbered\. +Using +address +of +(?P<unnumbered_intf>[\w\/\.\-]+)$')
+
+        # No global unicast address is configured
+        p20 = re.compile(r'^No +global +unicast +address +is +configured$')
+
         for line in out.splitlines():
             line = line.strip()
 
             # Vlan211 is up, line protocol is up
             # GigabitEthernet1/0/1 is administratively down, line protocol is down
-            p1 =  re.compile(r'^(?P<interface>[\w\/\.\-\:]+) +is'
-                             r' +(?P<enabled>[\w\s]+),'
-                             r' +line +protocol +is +(?P<oper_status>\w+)$')
             m = p1.match(line)
             if m:
                 intf = m.groupdict()['interface']
@@ -3272,101 +3354,69 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
 
                 # initial list variable again for new interface
                 joined_group = []
+                global_address = None
                 continue
 
             # IPv6 is enabled, link-local address is FE80::257:D2FF:FE28:
             # IPv6 is tentative, link-local address is FE80::257:D2FF:FEFF:428C [TEN]
             # IPv6 is tentative, link-local address is FE80::257:D2FF:FEFF:428C [UNA/TEN]
-            p2 = re.compile(r'^IPv6 +is +(?P<status>\w+), +'
-                             r'link-local +address +is +(?P<link_local>[\w\:]+)'
-                             r'( *\[(?P<type>[\w\/]+)\])?$')
             m = p2.match(line)
             if m:
                 status = m.groupdict()['status']
                 link_addr = m.groupdict()['link_local']
 
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-
-                if link_addr not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6'][link_addr] = {}
-
-                ret_dict[intf]['ipv6'][link_addr]['ip'] = link_addr
-                ret_dict[intf]['ipv6'][link_addr]['origin'] = 'link_layer'
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                link_addr_dict = ipv6_dict.setdefault(link_addr, {})
+                link_addr_dict['ip'] = link_addr
+                link_addr_dict['origin'] = 'link_layer'
 
                 if status.lower() in ['preferred', 'deprecated', 'invalid',
                                       'inaccessible', 'unknown', 'tentative',
                                       'duplicate', 'optimistic']:
-                    ret_dict[intf]['ipv6'][link_addr]['status'] = status.lower()
+                    link_addr_dict['status'] = status.lower()
                 else:
-                    ret_dict[intf]['ipv6'][link_addr]['status'] = 'valid'
+                    link_addr_dict['status'] = 'valid'
                 continue
 
-            # No Virtual link-local address(es):
-            # Virtual link-local address(es):
             # FE80::5:73FF:FEA0:16 [UNA/OOD]
-            p21 = re.compile(r'^Virtual +link\-local +address\(es\)\:$')
-            m = p21.match(line)
-            if m:
-                ipv6 = True
-                continue
-
-            p21_1 = re.compile(r'^(?P<ipv6>[\w\:]+)'
-                                r'( *\[(?P<type>[\w\/]+)\])?$')
             m = p21_1.match(line)
-            if m and ipv6:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                address = '{ip}'.format(ip=m.groupdict()['ipv6'])
-                if address not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6'][address] = {}
-                ret_dict[intf]['ipv6'][address]['ip'] = m.groupdict()['ipv6']
-                ret_dict[intf]['ipv6'][address]['virtual'] = True
+            if m and intf:
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                virtual_address = '{ip}'.format(ip=m.groupdict()['ipv6'])
+                virtual_address_dict = ipv6_dict.setdefault(virtual_address, {})
+                virtual_address_dict['ip'] = m.groupdict()['ipv6']
+                virtual_address_dict['virtual'] = True
 
                 ip_type = m.groupdict()['type']
                 if ip_type and 'any' in ip_type.lower():
-                    ret_dict[intf]['ipv6'][address]['anycast'] = True
+                    virtual_address_dict['anycast'] = True
                 elif ip_type and 'eui' in ip_type.lower():
-                    ret_dict[intf]['ipv6'][address]['eui_64'] = True
+                    virtual_address_dict['eui_64'] = True
                 elif ip_type:
                     for code in ip_type.lower().split('/'):
                         if code in status_code:
-                            ret_dict[intf]['ipv6'][address]['status'] = status_code[code]
+                            virtual_address_dict['status'] = status_code[code]
                         else:
-                            ret_dict[intf]['ipv6'][address]['status'] = 'valid'
+                            virtual_address_dict['status'] = 'valid'
                 continue
 
             # Stateless address autoconfig enabled
-            p3 = re.compile(r'^Stateless +address +autoconfig +enabled$')
             m = p3.match(line)
             if m:
                 ret_dict[intf]['autoconf'] = True
                 continue
 
-            # Global unicast address(es):
             #   2001:10::14:1, subnet is 2001:10::14:0/112
             #   2001:DB8:3:3::3, subnet is 2001:DB8:3:3::/64 [ANY/TEN]
-            p4 = re.compile(r'^Global +unicast +address\(es\):$')
-            m = p4.match(line)
-            if m:
-                ipv6 = True
-                continue
-
-            p4_1 = re.compile(r'^(?P<ipv6>[\w\:]+), +subnet +is +(?P<dum1>(?P<dum2>[\w\:]+)'
-                               r'\/(?P<prefix_length>[0-9]+))'
-                               r'( *\[(?P<type>[\w\/]+)\])?$')
             m = p4_1.match(line)
-            if m and ipv6:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                address = '{ip}/{mask}'.format(ip=m.groupdict()['ipv6'],
-                                               mask=m.groupdict()['prefix_length'])
-                if address not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6'][address] = {}
-                ret_dict[intf]['ipv6'][address]['ip'] = m.groupdict()['ipv6']
+            if m and intf:
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                global_address = '{ip}/{mask}'.format(ip=m.groupdict()['ipv6'],
+                                                       mask=m.groupdict()['prefix_length'])
+                global_address_dict = ipv6_dict.setdefault(global_address, {})
+                global_address_dict['ip'] = m.groupdict()['ipv6']
 
-                ret_dict[intf]['ipv6'][address]['prefix_length'] = \
-                    m.groupdict()['prefix_length']
+                global_address_dict['prefix_length'] = m.groupdict()['prefix_length']
 
                 try:
                     status
@@ -3376,115 +3426,81 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                     if status.lower() in ['preferred', 'deprecated', 'invalid',
                                           'inaccessible', 'unknown', 'tentative',
                                           'duplicate', 'optimistic']:
-                        ret_dict[intf]['ipv6'][address]['status'] = status.lower()
+                        global_address_dict['status'] = status.lower()
                     else:
-                        ret_dict[intf]['ipv6'][address]['status'] = 'valid'
-                    ret_dict[intf]['ipv6']['enabled'] = True
+                        global_address_dict['status'] = 'valid'
+                    ipv6_dict['enabled'] = True
 
                 ip_type = m.groupdict()['type']
                 if ip_type and 'any' in ip_type.lower():
-                    ret_dict[intf]['ipv6'][address]['anycast'] = True
+                    global_address_dict['anycast'] = True
                 elif ip_type and 'eui' in ip_type.lower():
-                    ret_dict[intf]['ipv6'][address]['eui_64'] = True
+                    global_address_dict['eui_64'] = True
                 elif ip_type:
                     for code in ip_type.lower().split('/'):
                         if code in status_code:
-                            ret_dict[intf]['ipv6'][address]['status'] = status_code[code]
+                            global_address_dict['status'] = status_code[code]
                         else:
-                            ret_dict[intf]['ipv6'][address]['status'] = 'valid'
+                            global_address_dict['status'] = 'valid'
                 continue
 
             #     valid lifetime 2591911 preferred lifetime 604711
-            p4_2 = re.compile(r'^valid +lifetime +(?P<valid>\d+) +'
-                               r'preferred +lifetime +(?P<preferred>\d+)$')
             m = p4_2.match(line)
-            if m and ipv6:
-                try:
-                    address
-                except Exception:
-                    pass
-                else:
-                    if 'autoconf' not in ret_dict[intf]['ipv6'][address]:
-                        ret_dict[intf]['ipv6'][address]['autoconf'] = {}
-                    ret_dict[intf]['ipv6'][address]['autoconf']\
-                        ['valid_lifetime'] = int(m.groupdict()['valid'])
-                    ret_dict[intf]['ipv6'][address]['autoconf']\
-                        ['preferred_lifetime'] = int(m.groupdict()['preferred'])
+            if m and global_address:
+                autoconf_dict = ret_dict[intf]['ipv6'][global_address].setdefault(
+                    'autoconf', {})
+                autoconf_dict['valid_lifetime'] = int(m.groupdict()['valid'])
+                autoconf_dict['preferred_lifetime'] = int(m.groupdict()['preferred'])
                 continue
 
-            # Joined group address(es):
             #   FF02::1
-            #   FF02::1:FF14:1
-            #   FF02::1:FF28:1A71
-            p5 = re.compile(r'^Joined +group +address\(es\):$')
-            m = p5.match(line)
-            if m:
-                ipv6 = False
-                continue
-
-            p5_1 = re.compile(r'^(?P<address>[\w\:]+)$')
             m = p5_1.match(line)
-            if m and not ipv6:
+            if m and intf:
                 joined_group.append(m.groupdict()['address'])
                 ret_dict[intf]['joined_group_addresses'] = sorted(joined_group)
                 continue
 
             # MTU is 1500 bytes
-            p6 = re.compile(r'^MTU +is +(?P<mtu>\d+) +bytes$')
             m = p6.match(line)
             if m:
                 ret_dict[intf]['mtu'] = int(m.groupdict()['mtu'])
                 continue
 
             # VPN Routing/Forwarding "VRF1"
-            p6 = re.compile(r'^VPN +Routing\/Forwarding +\"(?P<vrf>[\w\-]+)\"$')
-            m = p6.match(line)
+            m = p6_1.match(line)
             if m:
                 ret_dict[intf]['vrf'] = m.groupdict()['vrf']
                 continue
 
             # ICMP error messages limited to one every 100 milliseconds
-            p7 = re.compile(r'^ICMP +error +messages +limited +to +one +'
-                             r'every +(?P<limited>\d+) +milliseconds$')
             m = p7.match(line)
             if m:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                if 'icmp' not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6']['icmp'] = {}
-                ret_dict[intf]['ipv6']['icmp']['error_messages_limited'] = \
-                    int(m.groupdict()['limited'])
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                icmp_dict = ipv6_dict.setdefault('icmp', {})
+                icmp_dict['error_messages_limited'] = int(m.groupdict()['limited'])
                 continue
 
             # ICMP redirects are enabled
-            p8 = re.compile(r'^ICMP +redirects +are +(?P<status>\w+)$')
             m = p8.match(line)
             if m:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                if 'icmp' not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6']['icmp'] = {}
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                icmp_dict = ipv6_dict.setdefault('icmp', {})
                 if 'enabled' in m.groupdict()['status']:
-                    ret_dict[intf]['ipv6']['icmp']['redirects'] = True
+                    icmp_dict['redirects'] = True
                 else:
-                    ret_dict[intf]['ipv6']['icmp']['redirects'] = False
+                    icmp_dict['redirects'] = False
                 continue
 
             # ICMP unreachables are sent
-            p9 = re.compile(r'^ICMP +unreachables +are +(?P<status>[\w\s]+)$')
             m = p9.match(line)
             if m:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                if 'icmp' not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6']['icmp'] = {}
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                icmp_dict = ipv6_dict.setdefault('icmp', {})
                 if 'not sent' not in m.groupdict()['status']:
-                    ret_dict[intf]['ipv6']['icmp']['unreachables'] = m.groupdict()['status']
+                    icmp_dict['unreachables'] = m.groupdict()['status']
                 continue
 
             # ND DAD is enabled, number of DAD attempts: 1
-            p10 = re.compile(r'^ND +DAD +is +(?P<status>\w+), +'
-                              r'number +of +DAD +attempts: +(?P<attempts>\d+)$')
             m = p10.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3499,8 +3515,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND reachable time is 30000 milliseconds (using 30000)
-            p11 = re.compile(r'^ND +reachable +time +is (?P<time>\d+) +milliseconds'
-                              r' +\(using +(?P<use>\d+)\)$')
             m = p11.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3510,8 +3524,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND NS retransmit interval is 1000 milliseconds
-            p12 = re.compile(r'^ND +NS +retransmit +interval +is'
-                              r' +(?P<interval>\d+) +milliseconds$')
             m = p12.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3520,8 +3532,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND advertised reachable time is 0 (unspecified)
-            p13 = re.compile(r'^ND +advertised +reachable +time +is +(?P<time>\d+)'
-                              r' +\((?P<dummy>\S+)\)$')
             m = p13.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3534,8 +3544,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND advertised retransmit interval is 0 (unspecified)
-            p14 = re.compile(r'^ND +advertised +retransmit +interval +is +(?P<time>\d+)'
-                              r' +\((?P<dummy>\S+)\)$')
             m = p14.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3548,8 +3556,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND router advertisements are sent every 200 seconds
-            p15 = re.compile(r'^ND +router +advertisements +are +sent +'
-                              r'every +(?P<time>\d+) +seconds$')
             m = p15.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3558,8 +3564,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND router advertisements live for 1800 seconds
-            p16 = re.compile(r'^ND +router +advertisements +live +for +'
-                              r'(?P<time>\d+) +seconds$')
             m = p16.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3568,8 +3572,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND advertised default router preference is Medium
-            p17 = re.compile(r'^ND +advertised +default +router +preference +'
-                              r'is +(?P<prefer>\w+)$')
             m = p17.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3578,7 +3580,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # ND RAs are suppressed (periodic)
-            p17_1 = re.compile(r'^ND +RAs +are +suppressed.*$')
             m = p17_1.match(line)
             if m:
                 nd_dict = ret_dict.setdefault(intf, {}).setdefault('ipv6', {}).setdefault('nd', {})
@@ -3586,7 +3587,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # Hosts use stateless autoconfig for addresses.
-            p18 = re.compile(r'^Hosts +use +(?P<addr_conf_method>[\w\s]+) +for +addresses.$')
             m = p18.match(line)
             if m:
                 ret_dict[intf]['addresses_config_method'] = \
@@ -3594,7 +3594,6 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # Hosts use DHCP to obtain routable addresses.
-            p18_1 = re.compile(r'^Hosts +use +(?P<addr_conf_method>[\w\s]+) +to +obtain +routable +addresses.$')
             m = p18_1.match(line)
             if m:
                 ret_dict[intf]['addresses_config_method'] = \
@@ -3602,26 +3601,19 @@ class ShowIpv6Interface(ShowIpv6InterfaceSchema):
                 continue
 
             # Interface is unnumbered. Using address of Loopback0
-            p19 = re.compile(r'^Interface +is +unnumbered. +Using +address +of'
-                              r' +(?P<unnumbered_intf>[\w\/\.]+)$')
             m = p19.match(line)
             if m:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-                if 'unnumbered' not in ret_dict[intf]['ipv6']:
-                    ret_dict[intf]['ipv6']['unnumbered'] = {}
-                ret_dict[intf]['ipv6']['unnumbered']['interface_ref'] = \
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                unnumbered_dict = ipv6_dict.setdefault('unnumbered', {})
+                unnumbered_dict['interface_ref'] = \
                     Common.convert_intf_name(m.groupdict()['unnumbered_intf'])
                 continue
 
             # No global unicast address is configured
-            p20 = re.compile(r'^No +global +unicast +address +is +configured$')
             m = p20.match(line)
             if m:
-                if 'ipv6' not in ret_dict[intf]:
-                    ret_dict[intf]['ipv6'] = {}
-
-                ret_dict[intf]['ipv6']['enabled'] = False
+                ipv6_dict = ret_dict[intf].setdefault('ipv6', {})
+                ipv6_dict['enabled'] = False
                 continue
 
         return ret_dict
@@ -3647,17 +3639,21 @@ class ShowInterfacesTrunkSchema(MetaParser):
 
 class ShowInterfacesTrunk(ShowInterfacesTrunkSchema):
     """parser for show interfaces trunk"""
-    cli_command = 'show interfaces trunk'
+    cli_command = ['show interfaces trunk', 'show interfaces {interface} trunk']
 
-    def cli(self,output=None):
+    def cli(self, interface='', output=None):
         if output is None:
-            out = self.device.execute(self.cli_command)
+            if interface:
+                cmd = self.cli_command[1].format(interface=interface)
+            else:
+                cmd = self.cli_command[0]
+            out = self.device.execute(cmd)
         else:
             out = output
 
         # initial regexp pattern
         p1 = re.compile(r'^(?P<name>[\w\-\/\.]+) +(?P<mode>\w+) +(?P<encapsulation>\S+) +'
-                         r'(?P<status>\w+) +(?P<native_vlan>\d+)$')
+                         r'(?P<status>[\w\-]+) +(?P<native_vlan>\d+)$')
         p2 = re.compile(r'^Port +Vlans +allowed +on +trunk$')
         p3 = re.compile(r'^Port +Vlans +allowed +and +active +in +management +domain$')
         p4 = re.compile(r'^Port +Vlans +in +spanning +tree +forwarding +state +and +not +pruned$')
@@ -3830,10 +3826,11 @@ class ShowInterfacesAccounting(ShowInterfacesAccountingSchema):
         # initial regexp pattern
         # GigabitEthernet0/0/0/0
         # GigabitEthernet11 OOB Net
+        # TenGigabitEthernet0/0/0 rvartr101 e1/9  rack  107-37 N2C-BE VRF
         # (need to exclude below line)
         # -------------------------------------------------------------------------------------------------------------------------
         p1 = re.compile(
-            r'^(?!-)(?P<interface>[a-zA-Z\-\d\/\.]+)(?P<description>( (\S)+)*)$'
+            r'^(?!-)(?P<interface>[a-zA-Z\-\d\/\.]+)(?P<description>(\s\s?(\S)+)*)$'
         )
 
         # Tunnel0 Pim Register Tunnel (Encap) for RP 10.186.1.1
@@ -6561,3 +6558,325 @@ class ShowInterfaceTeAccount(ShowInterfaceTeAccountSchema):
                 result[current_intf]['protocols'].append(protocol_data)
 
         return result
+        
+class ShowInterfacePlatformSchema(MetaParser):
+    """Schema for show interface {interface} platform"""
+
+    schema = {
+        'interfaces': {
+            Any(): {
+                'oper_status': str,
+                'line_protocol': str,
+                'hardware_type': str,
+                'mac_address': str,
+                'bia': str,
+                'mtu': int,
+                'bandwidth_kbit': int,
+                'duplex': str,
+                'speed': str,
+                Optional('controller_status'): {
+                    'tx_total_bytes': int,
+                    'rx_total_bytes': int,
+                },
+                Optional('interface_manager'): {
+                    'if_id': str,
+                    'state': str,
+                    'status': str,
+                    'type': str,
+                    'created_time': str,
+                    'last_modified_time': str,
+                }
+            }
+        }
+    }
+
+
+class ShowInterfacePlatform(ShowInterfacePlatformSchema):
+    """Parser for show interface {interface} platform"""
+
+    cli_command = 'show interface {interface} platform'
+
+    def cli(self, interface="", output=None):
+        if output is None:
+            output = self.device.execute(
+                self.cli_command.format(interface=interface)
+            )
+
+        # Initialize return dictionary
+        ret_dict = {}
+        current_intf = None
+        found_interfaces = False
+        
+        # example output:        
+        # Match: GigabitEthernet1/0/45 is up, line protocol is up (connected)
+        p1 = re.compile(r'^(?P<intf>\S+) is (?P<oper>\w+), line protocol is (?P<line>\w+)')
+        
+        # Match: Hardware is Gigabit Ethernet, address is 9088.5526.5bad (bia 9088.5526.5bad)
+        p2 = re.compile(r'^Hardware is (?P<hardware>.+), address is (?P<mac>\S+) \(bia (?P<bia>\S+)\)')
+        
+        # Match: MTU 1500 bytes, BW 1000000 Kbit/sec
+        p3 = re.compile(r'^MTU (?P<mtu>\d+) bytes, BW (?P<bw>\d+) Kbit/sec')
+        
+        # Match: Full-duplex, 1000Mb/s, media type is 10/100/1000BaseTX
+        p4 = re.compile(r'^(?P<duplex>\S+-duplex), (?P<speed>\S+), media type')
+        
+        # Match: 13794363 Total bytes              355068592 Total bytes
+        p5 = re.compile(r'^\s*(?P<tx>\d+) Total bytes\s+(?P<rx>\d+) Total bytes$')
+        
+        # Match: Interface IF_ID         : 0x0000000000000035
+        p6 = re.compile(r'^Interface IF_ID\s+:\s+(?P<ifid>\S+)')
+        
+        # Match: Interface Block State   : READY
+        p7 = re.compile(r'^Interface Block State\s+:\s+(?P<state>\S+)')
+        
+        # Match: Interface Status        : ADD, UPD
+        p8 = re.compile(r'^Interface Status\s+:\s+(?P<status>.+)')
+        
+        # Match: Interface Type          : ETHER
+        p9 = re.compile(r'^Interface Type\s+:\s+(?P<type>\S+)')
+        
+        # Match: Created Time            : 2026/01/20 12:03:10.285
+        p10 = re.compile(r'^Created Time\s+:\s+(?P<created>.+)')
+        
+        # Match: Last Modified Time      : 2026/01/20 12:06:39.984
+        p11 = re.compile(r'^Last Modified Time\s+:\s+(?P<modified>.+)')
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Match: GigabitEthernet1/0/45 is up, line protocol is up (connected)
+            m = p1.match(line)
+            if m:
+                current_intf = m.groupdict()['intf']
+                if not found_interfaces:
+                    ret_dict['interfaces'] = {}
+                    found_interfaces = True
+                ret_dict['interfaces'][current_intf] = {
+                    'oper_status': m.groupdict()['oper'],
+                    'line_protocol': m.groupdict()['line']
+                }
+                continue
+
+            if current_intf is None:
+                continue
+
+            # Match: Hardware is Gigabit Ethernet, address is 9088.5526.5bad (bia 9088.5526.5bad)
+            m = p2.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf].update({
+                    'hardware_type': m.groupdict()['hardware'],
+                    'mac_address': m.groupdict()['mac'],
+                    'bia': m.groupdict()['bia']
+                })
+                continue
+
+            # Match: MTU 1500 bytes, BW 1000000 Kbit/sec
+            m = p3.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf].update({
+                    'mtu': int(m.groupdict()['mtu']),
+                    'bandwidth_kbit': int(m.groupdict()['bw'])
+                })
+                continue
+
+            # Match: Full-duplex, 1000Mb/s, media type is 10/100/1000BaseTX
+            m = p4.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf].update({
+                    'duplex': m.groupdict()['duplex'],
+                    'speed': m.groupdict()['speed']
+                })
+                continue
+
+            # Match: 13794363 Total bytes              355068592 Total bytes
+            m = p5.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf].setdefault(
+                    'controller_status', {}
+                ).update({
+                    'tx_total_bytes': int(m.groupdict()['tx']),
+                    'rx_total_bytes': int(m.groupdict()['rx'])
+                })
+                continue
+
+            # Match: Interface IF_ID         : 0x0000000000000035
+            m = p6.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf].setdefault(
+                    'interface_manager', {}
+                )['if_id'] = m.groupdict()['ifid']
+                continue
+
+            # Match: Interface Block State   : READY
+            m = p7.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf]['interface_manager']['state'] = m.groupdict()['state']
+                continue
+
+            # Match: Interface Status        : ADD, UPD
+            m = p8.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf]['interface_manager']['status'] = m.groupdict()['status']
+                continue
+
+            # Match: Interface Type          : ETHER
+            m = p9.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf]['interface_manager']['type'] = m.groupdict()['type']
+                continue
+
+            # Match: Created Time            : 2026/01/20 12:03:10.285
+            m = p10.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf]['interface_manager']['created_time'] = m.groupdict()['created']
+                continue
+
+            # Match: Last Modified Time      : 2026/01/20 12:06:39.984
+            m = p11.match(line)
+            if m:
+                ret_dict['interfaces'][current_intf]['interface_manager']['last_modified_time'] = m.groupdict()['modified']
+                continue
+
+        return ret_dict
+
+
+# ====================================================
+#  Schema and Parser for:
+#    * show interfaces {interface} mac-accounting
+#    * show interfaces mac-accounting
+# ====================================================
+class ShowInterfacesMacAccountingSchema(MetaParser):
+    """Schema for:
+        show interfaces {interface} mac-accounting
+        show interfaces mac-accounting
+    """
+    schema = {
+        Any(): {
+            Optional('input'): {
+                Optional('free_count'): int,
+                Optional('mac_entries'): {
+                    Any(): {
+                        Optional('index'): int,
+                        'packets': int,
+                        'bytes': int,
+                        Optional('last_ms'): int,
+                    }
+                },
+                Optional('total_packets'): int,
+                Optional('total_bytes'): int,
+            },
+            Optional('output'): {
+                Optional('free_count'): int,
+                Optional('mac_entries'): {
+                    Any(): {
+                        Optional('index'): int,
+                        'packets': int,
+                        'bytes': int,
+                        Optional('last_ms'): int,
+                    }
+                },
+                Optional('total_packets'): int,
+                Optional('total_bytes'): int,
+            },
+        }
+    }
+
+
+class ShowInterfacesMacAccounting(ShowInterfacesMacAccountingSchema):
+    """Parser for:
+        show interfaces {interface} mac-accounting
+        show interfaces mac-accounting
+    """
+    cli_command = [
+        'show interfaces {interface} mac-accounting',
+        'show interfaces mac-accounting',
+    ]
+
+    def cli(self, interface=None, output=None):
+        if output is None:
+            if interface:
+                cmd = self.cli_command[0].format(interface=interface)
+            else:
+                cmd = self.cli_command[1]
+            out = self.device.execute(cmd)
+        else:
+            out = output
+
+        ret_dict = {}
+        current_intf = None
+        current_direction = None
+
+        # HundredGigE1/0/0
+        p_intf = re.compile(
+            r'^(?P<interface>[a-zA-Z][a-zA-Z\d\/\.\-]+)$'
+        )
+
+        # Input(494 free)  or  Output (511 free)
+        p_dir = re.compile(
+            r'^(?P<direction>Input|Output)\s*\((?P<free>\d+)\s+free\)',
+            re.IGNORECASE
+        )
+
+        # 0000.0c5d.92f9(58): 1 packets, 106 bytes, last: 4038ms ago
+        p_mac = re.compile(
+            r'^(?P<mac>[0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})'
+            r'\((?P<index>\d+)\):\s+(?P<packets>\d+)\s+packets?,\s+'
+            r'(?P<bytes>\d+)\s+bytes?,\s+last:\s+(?P<last_ms>\d+)ms\s+ago$'
+        )
+
+        # Total: 14 packets, 932 bytes
+        p_total = re.compile(
+            r'^Total:\s+(?P<total_packets>\d+)\s+packets?,\s+(?P<total_bytes>\d+)\s+bytes?$'
+        )
+
+        for line in out.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Match interface name
+            m = p_intf.match(line)
+            if m and not p_dir.match(line):
+                current_intf = m.group('interface')
+                current_direction = None
+                ret_dict.setdefault(current_intf, {})
+                continue
+
+            if current_intf is None:
+                continue
+
+            # Match Input/Output section header
+            m = p_dir.match(line)
+            if m:
+                current_direction = m.group('direction').lower()
+                free = int(m.group('free'))
+                ret_dict[current_intf].setdefault(current_direction, {})
+                ret_dict[current_intf][current_direction]['free_count'] = free
+                continue
+
+            if current_direction is None:
+                continue
+
+            # Match MAC accounting entry
+            m = p_mac.match(line)
+            if m:
+                mac = m.group('mac').lower()
+                ret_dict[current_intf][current_direction].setdefault('mac_entries', {})
+                ret_dict[current_intf][current_direction]['mac_entries'][mac] = {
+                    'index': int(m.group('index')),
+                    'packets': int(m.group('packets')),
+                    'bytes': int(m.group('bytes')),
+                    'last_ms': int(m.group('last_ms')),
+                }
+                continue
+
+            # Match Total line
+            m = p_total.match(line)
+            if m:
+                ret_dict[current_intf][current_direction]['total_packets'] = int(m.group('total_packets'))
+                ret_dict[current_intf][current_direction]['total_bytes'] = int(m.group('total_bytes'))
+                continue
+
+        return ret_dict

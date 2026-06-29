@@ -1687,6 +1687,18 @@ class ShowIpv6VrfAllInterface(ShowIpv6VrfAllInterfaceSchema):
                 ipv6_vrf_all_interface_dict[interface]['enabled'] = False
                 continue
 
+            # IPv6 is down (link local duplicate), link-local address is fe80::200:ff:fe00:1bcd [DUPLICATE][ND-DAD]
+            p2_3 = re.compile(r'^\s*IPv6 +is +down[^,]*, +link-local'
+                               r' +address +is +(?P<ipv6_link_local>[a-zA-Z0-9\:]+)'
+                               r'(?: +\[(?P<ipv6_link_local_state>[A-Za-z\-]+)\])?.*$')
+            m = p2_3.match(line)
+            if m:
+                ipv6_link_local = m.groupdict()['ipv6_link_local']
+                if m.groupdict()['ipv6_link_local_state']:
+                    ipv6_link_local_state = m.groupdict()['ipv6_link_local_state'].lower()
+                ipv6_vrf_all_interface_dict[interface]['enabled'] = False
+                continue
+
             # Global unicast address(es):
             # 2001:db8:3:3:a8aa:bbff:feff:8888, subnet is 2001:db8:3:3::/64 [TENTATIVE]
             p3 = re.compile(r'^\s*(?P<ipv6>(.+)(ff:fe)(.+)), +subnet +is'

@@ -1,0 +1,17 @@
+Router# show platform conditions
+
+Platform Condition Summary
+--------------------------
+
+Condition                          State        Details
+--------------------------------------------------------------
+CPU Utilization High               FALSE        Normal
+Memory Utilization High            FALSE        Normal
+QFP Congestion                     FALSE        No drops
+Interface Errors                   FALSE        None detected
+Temperature Warning                FALSE        Within threshold
+Fabric Link Down                   FALSE        All links operational
+Control Plane Protection Triggered FALSE        Not triggered
+Crash Condition Detected           FALSE        No crash history
+
+System Status : HEALTHY

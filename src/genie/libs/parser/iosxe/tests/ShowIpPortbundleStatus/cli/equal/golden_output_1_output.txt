@@ -1,0 +1,5 @@
+show ip portbundle status | include 10.2.81.13
+Bundle-length = 4
+Bundle-groups: -
+IP Address              Free Bundles            In-use Bundles
+10.2.81.13                       4031                    1

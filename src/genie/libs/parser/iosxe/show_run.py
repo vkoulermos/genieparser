@@ -10,6 +10,7 @@ IOSXE parsers for the following show commands:
     * 'show running-config | section bgp'
     * 'show running-config all | section class {class_map}'
     * 'show running-config vrf'
+    * 'show running-config all | section alarm'
 '''
 
 # Python
@@ -339,8 +340,10 @@ class ShowRunInterfaceSchema(MetaParser):
                     },
                 },
                 Optional('ipv4'): {
-                    'ip': str,
-                    'netmask': str,
+                    Optional('ip'): str,
+                    Optional('netmask'): str,
+                    Optional('dhcp'): bool,
+                    Optional('client_id'): str,
                 },
                 Optional('ipv6'): list,
                 Optional('ipv6_ospf'): {
@@ -469,7 +472,18 @@ class ShowRunInterfaceSchema(MetaParser):
                 Optional('ip_verify_unicast_source_reachable_via_rx_allow_self_ping'): bool,
                 Optional('ip_verify_unicast_source_reachable_via_rx_acl'): str,
                 Optional('pnp_startup_vlan'): int,
-
+                Optional('datalink_flow_monitor_input'): str,
+                Optional('datalink_flow_monitor_output'): str,
+                Optional('storm_control'): {
+                    Any(): {
+                        Optional('level'): str,
+                        Optional('low_level'): str,
+                    },
+                    Optional('action'): str,
+                },
+                Optional('min_links'): int,
+                Optional('ip_tcp_adjust_mss'): int,
+                Optional('ipv6_tcp_adjust_mss'): int,
             }
         }
     }
@@ -517,6 +531,9 @@ class ShowRunInterface(ShowRunInterfaceSchema):
 
         # ip address 10.1.21.249 255.255.255.0
         p4 = re.compile(r'^ip +address +(?P<ip>[\S]+) +(?P<netmask>[\S]+)$')
+
+        # ip address dhcp client-id Vlan1
+        p4_1 = re.compile(r'^ip +address +dhcp +client-id +(?P<client_id>\S+)$')
 
         # ipv6 address 2001:db8:4:1::1/64
         # ipv6 address 2001:db8:400:1::2/112
@@ -872,6 +889,35 @@ class ShowRunInterface(ShowRunInterfaceSchema):
         # pnp startup-vlan 100
         p117 = re.compile(r'^pnp startup-vlan (?P<vlan>\d+)$')
 
+        # storm-control broadcast level bps 100m 50m
+        # storm-control unicast level pps 20k
+        p118 = re.compile(r'^storm-control\s+(?P<storm_control_type>[\w\s\-]+)\s+level\s+(bps|pps)\s+(?P<level>\w+)(\s+(?P<low_level>\w+))?$')
+
+        # storm-control action trap
+        p119 = re.compile(r'^storm-control\s+action\s+(?P<action>\w+)$')
+
+        # port-channel min-links 3
+        p120 = re.compile(
+            r'^port-channel +min-links +(?P<min_links>\d+)$')
+
+        # datalink flow monitor fnf_mon input
+        p121 = re.compile(r'^datalink +flow +monitor +(?P<datalink_flow_monitor_input>[\S]+) +input$')
+
+        # datalink flow monitor fnf_mon output
+        p122 = re.compile(r'^datalink +flow +monitor +(?P<datalink_flow_monitor_output>[\S]+) +output$')
+
+        # ipv6 flow monitor monitor_ipv6_in input
+        p123 = re.compile(r'^ipv6 +flow +monitor +(?P<flow_monitor_input_v6>[\S]+) +input$')
+
+        # ipv6 flow monitor monitor_ipv6_out output
+        p124 = re.compile(r'^ipv6 +flow +monitor +(?P<flow_monitor_output_v6>[\S]+) +output$')
+
+        # ip tcp adjust-mss 9176
+        p125 = re.compile(r'^ip tcp adjust-mss (?P<ip_tcp_adjust_mss>\d+)$')
+
+        # ipv6 tcp adjust-mss 9156
+        p126 = re.compile(r'^ipv6 tcp adjust-mss (?P<ipv6_tcp_adjust_mss>\d+)$')
+
         for line in output.splitlines():
             line = line.strip()
 
@@ -906,6 +952,16 @@ class ShowRunInterface(ShowRunInterfaceSchema):
                                     'netmask': group['netmask']},
                                 })
                 continue
+
+            # ip address dhcp client-id Vlan1
+            m = p4_1.match(line)
+            if m:
+                group = m.groupdict()
+                ipv4_dict = intf_dict.setdefault('ipv4', {})
+                ipv4_dict['dhcp'] = True
+                ipv4_dict['client_id'] = group['client_id']
+                continue
+
 
             # ipv6 address 2001:db8:4:1::1/64
             m = p5.match(line)
@@ -1791,6 +1847,75 @@ class ShowRunInterface(ShowRunInterfaceSchema):
                 group = m.groupdict()
                 intf_dict['pnp_startup_vlan'] = int(group['vlan'])
                 continue
+
+		    # storm-control multicast level bps 100m 50m
+            # storm-control unicast level pps 20k
+            m = p118.match(line)
+            if m:
+                group = m.groupdict()
+                storm_dict=intf_dict.setdefault('storm_control', {}).setdefault(group['storm_control_type'], {})
+                storm_dict['level'] = group['level']
+                if group['low_level']:
+                    storm_dict['low_level'] = group['low_level']
+                continue
+                
+            # storm-control action trap     
+            m = p119.match(line)
+            if m:
+                group = m.groupdict()
+                action_dict = intf_dict.setdefault('storm_control', {})
+                action_dict['action'] = group['action']
+                continue
+
+            # port-channel min-links 3
+            m = p120.match(line)
+            if m:
+                group = m.groupdict()
+                intf_dict.update({
+                    'min_links': int(group['min_links'])
+                })
+                continue
+
+            # datalink flow monitor fnf_mon input
+            m = p121.match(line)
+            if m:
+                group = m.groupdict()
+                intf_dict.update({'datalink_flow_monitor_input': group['datalink_flow_monitor_input']})
+                continue
+
+            # datalink flow monitor fnf_mon output
+            m = p122.match(line)
+            if m:
+                group = m.groupdict()
+                intf_dict.update({'datalink_flow_monitor_output': group['datalink_flow_monitor_output']})
+                continue
+
+            # ipv6 flow monitor monitor_ipv6_in input
+            m = p123.match(line)
+            if m:
+                group = m.groupdict()
+                intf_dict.update({'flow_monitor_input_v6': group['flow_monitor_input_v6']})
+                continue
+
+            # ipv6 flow monitor monitor_ipv6_out output
+            m = p124.match(line)
+            if m:
+                group = m.groupdict()
+                intf_dict.update({'flow_monitor_output_v6': group['flow_monitor_output_v6']})
+                continue
+
+            # ip tcp adjust-mss 9176
+            m = p125.match(line)
+            if m:
+                intf_dict['ip_tcp_adjust_mss'] = int(m.groupdict()['ip_tcp_adjust_mss'])
+                continue
+
+            # ipv6 tcp adjust-mss 9156
+            m = p126.match(line)
+            if m:
+                intf_dict['ipv6_tcp_adjust_mss'] = int(m.groupdict()['ipv6_tcp_adjust_mss'])
+                continue
+
 
         return config_dict
 
@@ -5342,3 +5467,150 @@ class ShowRunningConfigVrf(ShowRunningConfigVrfSchema):
                 continue
 
         return ret_dict
+
+
+# =================================================
+# Schema for:
+#   * 'show running-config all | section alarm'
+# ==================================================
+
+import re
+from genie.metaparser import MetaParser
+from genie.metaparser.util.schemaengine import Any, Optional
+
+class ShowRunSectionAlarmSchema(MetaParser):
+    """Schema for show running-config all | section alarm"""
+
+    schema = {
+        'alarm_profile': {
+            'name': str,
+            Optional('alarm'): str,
+            Optional('syslog'): str,
+            Optional('notifies'): str,
+        },
+        Optional('alarm_facility'): {
+            # Key will be "facility" or "facility selector" (e.g., "hsr" or "input-alarm 1")
+            Any(): {
+                Optional('actions'): {
+                    Any(): {
+                        'enabled': bool,                            
+                    }
+                },
+                Optional('thresholds'): {
+                    Optional('low'): int,
+                    Optional('high'): int,
+                }
+            },
+        },
+        Optional('logging'): {
+            Optional('alarm'): bool,
+        },
+        Optional('snmp'): {
+            Optional('mib'): {
+                Optional('flowmon'): {
+                    Optional('alarmhistorysize'): int,
+                }
+            }
+        }
+    }
+
+
+class ShowRunSectionAlarm(ShowRunSectionAlarmSchema):
+    """Parser for show running-config all | section alarm"""
+
+    cli_command = 'show running-config all | section alarm'
+
+    def cli(self, output=None):
+        if output is None:
+            output = self.device.execute(self.cli_command)
+
+        ret_dict = {}
+        profile_dict = None
+
+        # alarm-profile defaultPort
+        p0 = re.compile(r'^alarm-profile +(?P<name>\S+)$')
+
+        # alarm not-operating / syslog not-operating / notifies not-operating
+        p1 = re.compile(r'^(?P<key>alarm|syslog|notifies) +(?P<val>\S+)$')
+
+        # thresholds: alarm facility temperature primary low 0
+        p2 = re.compile(r'^alarm +facility +(?P<facility>\S+) +(?P<selector>\S+) +(?P<which>low|high) +(?P<value>\d+)$')
+
+        # actions: no alarm facility hsr enable / alarm facility input-alarm 1 syslog
+        p3 = re.compile(
+            r'^(?P<no>no +)?alarm +facility +(?P<facility>\S+)'
+            r'(?: +(?P<selector>\S+))? +(?P<setting>enable|syslog|notifies|relay +major)$'
+        )
+
+        # no logging alarm
+        p4 = re.compile(r'^no +logging +alarm$')
+
+        # snmp mib flowmon alarmhistorysize 500
+        p5 = re.compile(r'^snmp +mib +flowmon +alarmhistorysize +(?P<size>\d+)$')        
+
+        def _ensure_facility(facility, selector):
+            # Combine facility and selector into a single string key to flatten the level
+            full_key = f"{facility} {selector}" if selector else facility
+            return ret_dict.setdefault('alarm_facility', {}).setdefault(full_key, {})
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line or line.startswith('----') or line.startswith('show '):
+                continue
+
+            # alarm-profile
+            m = p0.match(line)
+            if m:
+                ret_dict['alarm_profile'] = {'name': m.group('name')}
+                profile_dict = ret_dict['alarm_profile']
+                continue
+
+            # profile settings
+            m = p1.match(line)
+            if m and profile_dict is not None:
+                profile_dict[m.group('key')] = m.group('val')
+                continue
+
+            # thresholds
+            m = p2.match(line)
+            if m:
+                facility = m.group('facility')
+                selector = m.group('selector')
+                which = m.group('which')
+                value = int(m.group('value'))
+
+                fdict = _ensure_facility(facility, selector)
+                fdict.setdefault('thresholds', {})[which] = value
+                continue
+
+            # actions
+            m = p3.match(line)
+            if m:
+                enabled = False if m.group('no') else True
+                facility = m.group('facility')
+                selector = m.group('selector')
+                setting = m.group('setting')
+                
+                action_key = setting.replace(' ', '_')
+
+                fdict = _ensure_facility(facility, selector)
+                actions = fdict.setdefault('actions', {})
+                actions[action_key] = {'enabled': enabled}
+                continue
+
+            # logging
+            if p4.match(line):
+                ret_dict.setdefault('logging', {})['alarm'] = False
+                continue
+
+            # snmp
+            m = p5.match(line)
+            if m:
+                ret_dict.setdefault('snmp', {}).setdefault('mib', {}).setdefault('flowmon', {})[
+                    'alarmhistorysize'
+                ] = int(m.group('size'))
+                continue
+
+        return ret_dict          
+    
+                        

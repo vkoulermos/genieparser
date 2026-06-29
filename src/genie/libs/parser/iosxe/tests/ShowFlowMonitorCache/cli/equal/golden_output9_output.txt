@@ -1,0 +1,50 @@
+show flow monitor FNF_MONITOR_USERDEF_PERM cache
+  Cache type:                            Permanent (Platform cache)
+  Cache size:                               200000
+  Current entries:                               3
+  High Watermark:                                3
+
+  Flows added:                                   3
+  Updates sent            (  1800 secs)          0
+
+IPV4 SOURCE ADDRESS:       40.0.0.1
+IPV4 DESTINATION ADDRESS:  50.0.0.9
+TRNS SOURCE PORT:          80
+TRNS DESTINATION PORT:     80
+UDP DESTINATION PORT:      80
+INTERFACE INPUT:           Gi0/1/2
+INTERFACE OUTPUT:          Gi0/1/4
+counter bytes:             100
+counter packets:           1
+timestamp first:           19:21:38.338
+timestamp last:            19:21:38.338
+ip tos:                    0xB4
+ip protocol:               17
+
+IPV4 SOURCE ADDRESS:       40.0.0.1
+IPV4 DESTINATION ADDRESS:  50.0.0.13
+TRNS SOURCE PORT:          80
+TRNS DESTINATION PORT:     80
+UDP DESTINATION PORT:      80
+INTERFACE INPUT:           Gi0/1/2
+INTERFACE OUTPUT:          Gi0/1/4
+counter bytes:             100
+counter packets:           1
+timestamp first:           19:21:38.738
+timestamp last:            19:21:38.738
+ip tos:                    0xB4
+ip protocol:               17
+
+IPV4 SOURCE ADDRESS:       40.0.0.1
+IPV4 DESTINATION ADDRESS:  50.0.0.12
+TRNS SOURCE PORT:          80
+TRNS DESTINATION PORT:     80
+UDP DESTINATION PORT:      80
+INTERFACE INPUT:           Gi0/1/2
+INTERFACE OUTPUT:          Gi0/1/4
+counter bytes:             100
+counter packets:           1
+timestamp first:           19:21:38.638
+timestamp last:            19:21:38.638
+ip tos:                    0xB4
+ip protocol:               17

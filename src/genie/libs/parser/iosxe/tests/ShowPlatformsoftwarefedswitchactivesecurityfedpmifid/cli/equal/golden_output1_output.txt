@@ -1,0 +1,10 @@
+Platform Security PM Information
+
+
+IIF-ID   = 000000000000002c
+IIF-Name = GigabitEthernet1/0/37
+Auth Behavior Value  = 3
+Auth Behavior Desc   = AL_BH_DROP_ALL_LRN_DATA
+Secure Feature Flags = 0x3
+Secure Feature Desc  = dot1x psec
+PSec Inactivity Time = 120

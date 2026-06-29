@@ -1,12 +1,13 @@
 """show_vlan.py
 
+    * show vlans dot1q {vlan_id} gigabitethernet3/0/0 {interface}
 """
 import re
 import logging
 
 from genie.metaparser import MetaParser
 from genie.libs.parser.utils.common import Common
-from genie.metaparser.util.schemaengine import Any, Optional
+from genie.metaparser.util.schemaengine import Any, Optional, Or
 
 
 logger = logging.getLogger(__name__)
@@ -1117,7 +1118,7 @@ class ShowVlanMapping(ShowVlanMappingSchema):
         # Interface Po6:
         p2 = re.compile(r"^Interface\s+(?P<interface>\S+):$")
         # 20                                    30             1-to-1
-        p3 = re.compile(r"^(?P<vlan_map>\d+)\s+(?P<trans_vlan>\d+)\s+(?P<operation>\S+)$")
+        p3 = re.compile(r"^\s*(?P<vlan_map>[\d\-*]+)\s+(?P<trans_vlan>\d+)\s+(?P<operation>.+?)\s*$")
 
         ret_dict = {}
 
@@ -1468,3 +1469,109 @@ class ShowVlans(ShowVlansSchema):
         return parsed_dict
 
 
+
+
+class ShowVlansDot1qVlanIdGigabitethernet300InterfaceSchema(MetaParser):
+    """Schema for show vlans dot1q {vlan_id} gigabitethernet3/0/0 {interface}"""
+    schema = {
+        "vlans": {
+            Any(): {
+                "interfaces": {
+                    Any(): {
+                        "counters": {
+                            "input_packets": int,
+                            "input_bytes": int,
+                            "output_packets": int,
+                            "output_bytes": int,
+                            "oversubscription_drops": Or(int, None),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+class ShowVlansDot1qVlanIdGigabitethernet300Interface(ShowVlansDot1qVlanIdGigabitethernet300InterfaceSchema):
+    """Parser for show vlans dot1q {vlan_id} gigabitethernet3/0/0 {interface}"""
+    cli_command = "show vlans dot1q {vlan_id} gigabitethernet3/0/0 {interface}"
+
+    def cli(self, vlan_id=None, interface=None, output=None):
+        if output is None:
+            cmd = self.cli_command.format(vlan_id=vlan_id, interface=interface)
+            output = self.device.execute(cmd)
+
+        ret_dict = {}
+        if not output:
+            return ret_dict
+
+        vlan_id_key = "{vlan_id}" if vlan_id is None else vlan_id
+        interface_key = "{interface}" if interface is None else interface
+
+        # Total statistics for 802.1Q VLAN 50 on GigabitEthernet3/0/0:
+        p1 = re.compile(r'^\s*Total statistics for 802\.1Q VLAN\s+(?P<vlan>\d+)\s+on\s+(?P<intf>\S+):$')
+
+        #    100 packets, 6400 bytes input
+        p2 = re.compile(r'^\s*(?P<input_packets>\d+)\s+packets,\s+(?P<input_bytes>\d+)\s+bytes\s+input$')
+
+        #    0 packets, 0 bytes output
+        p3 = re.compile(r'^\s*(?P<output_packets>\d+)\s+packets,\s+(?P<output_bytes>\d+)\s+bytes\s+output$')
+
+        #    0 oversubscription packet drops
+        p4 = re.compile(r'^\s*(?P<oversub>\d+)\s+oversubscription\s+packet\s+drops$')
+
+        input_packets = None
+        input_bytes = None
+        output_packets = None
+        output_bytes = None
+        oversub_drops = None
+
+        for line in output.splitlines():
+            line = line.rstrip()
+            if not line:
+                continue
+
+            # Total statistics for 802.1Q VLAN 50 on GigabitEthernet3/0/0:
+            m = p1.match(line)
+            if m:
+                continue
+
+            #    100 packets, 6400 bytes input
+            m = p2.match(line)
+            if m:
+                gd = m.groupdict()
+                input_packets = int(gd["input_packets"])
+                input_bytes = int(gd["input_bytes"])
+                continue
+
+            #    0 packets, 0 bytes output
+            m = p3.match(line)
+            if m:
+                gd = m.groupdict()
+                output_packets = int(gd["output_packets"])
+                output_bytes = int(gd["output_bytes"])
+                continue
+
+            #    0 oversubscription packet drops
+            m = p4.match(line)
+            if m:
+                oversub_drops = int(m.groupdict()["oversub"])
+                continue
+
+        vlans_dict = ret_dict.setdefault("vlans", {})
+        vlan_entry = vlans_dict.setdefault(vlan_id_key, {})
+        interfaces_dict = vlan_entry.setdefault("interfaces", {})
+        intf_entry = interfaces_dict.setdefault(interface_key, {})
+        counters_dict = intf_entry.setdefault("counters", {})
+
+        if input_packets is not None:
+            counters_dict["input_packets"] = input_packets
+        if input_bytes is not None:
+            counters_dict["input_bytes"] = input_bytes
+        if output_packets is not None:
+            counters_dict["output_packets"] = output_packets
+        if output_bytes is not None:
+            counters_dict["output_bytes"] = output_bytes
+        counters_dict["oversubscription_drops"] = oversub_drops
+
+        return ret_dict

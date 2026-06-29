@@ -675,18 +675,24 @@ class ShowMonitorCaptureBufferSchema(MetaParser):
 
 class ShowMonitorCaptureBuffer(ShowMonitorCaptureBufferSchema):
 
-    cli_command = ['show monitor capture {capture_name} buffer', 'show monitor capture file {path}']
-
-    def cli(self, capture_name="", path="", output=None):
+    cli_command = ['show monitor capture {capture_name} buffer', 
+                   'show monitor capture file {path}',
+                   'show monitor capture {capture_name} buffer {brief}']
+    
+    def cli(self, capture_name="", path="", brief="", output=None):
         if output is None:
             if capture_name:
-                output = self.device.execute(self.cli_command[0].format(capture_name=capture_name),timeout=180)
+                if brief:
+                    output = self.device.execute(self.cli_command[2].format(capture_name=capture_name, brief=brief),timeout=180)
+                else:
+                    output = self.device.execute(self.cli_command[0].format(capture_name=capture_name),timeout=180)
             else:
                 output = self.device.execute(self.cli_command[1].format(path=path),timeout=180)
 
         # 1   0.000000 f4:db:e6:5b:97:04 -> 01:80:c2:00:00:00 STP 60 RST. Root = 32768/805/6c:b2:ae:49:6a:40  Cost = 0  Port = 0x8185
         # 2   2.999988     10.1.1.2 -> 233.252.252.127 IPv4 96 Fragmented IP protocol (proto=UDP 17, off=1480, ID=93f1)
-        p1 = re.compile(r'^(?P<pck_no>\d+) +(?P<time>[\d\.]+) +(?P<scr_mac_address>[\da-f\:\.]+) +-> +(?P<dst_mac_address>[\da-f\:\.]+) +(?P<protocol>[\w]+) +(?P<packet_size>[0-9]+) +(?P<data>.*)$')
+        # 1   0.000000 SchneiderEle_00:00:10 -> Cisco_00:00:20 0xffff 500 Ethernet II
+        p1 = re.compile(r'^(?P<pck_no>\d+) +(?P<time>[\d\.]+) +(?P<scr_mac_address>[\w\:\.]+) +-> +(?P<dst_mac_address>[\w\:\.]+) +(?P<protocol>[\w]+) +(?P<packet_size>[0-9]+) +(?P<data>.*)$')
 
         ret_dict = {}
 
@@ -825,6 +831,10 @@ class ShowMonitorCaptureBufferDetailedSchema(MetaParser):
                 Optional('padding'): str,
                 Optional('message_type'): str,
                 Optional('host_name'): str,
+                Optional('section_number'): str,
+                Optional('utc_arrival_time'): str,
+                Optional('epoch_arrival_time'): str,
+                Optional('data'): str,
             }
         }
     }
